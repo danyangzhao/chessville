@@ -106,12 +106,14 @@ const UIManager = (() => {
       const screens = document.querySelectorAll('.screen');
       screens.forEach(screen => {
         screen.style.display = 'none';
+        screen.classList.add('hidden');
       });
       
       // Show the requested screen
       const screenToShow = document.getElementById(screenId);
       if (screenToShow) {
         screenToShow.style.display = 'block';
+        screenToShow.classList.remove('hidden');
         
         // If showing the waiting screen, make sure it has a message element
         if (screenId === 'waiting-screen') {
