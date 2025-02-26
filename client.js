@@ -94,10 +94,10 @@ function initialize() {
     initializeScreens();
     
     // Set up event handlers for UI elements
-    setupEventHandlers();
+    setupUIEventListeners();
     
     // Load chess.js library
-    loadChessJs(() => {
+    loadChessLibrary((success) => {
       console.log('Chess.js library loaded successfully');
       
       // Initialize Socket.io connection
