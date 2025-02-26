@@ -6,8 +6,19 @@
   <title>Chess Farmer - Multiplayer</title>
   <!-- Add chess.js library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-  <!-- Add Socket.io client library -->
+  <!-- Add Socket.io client library with fallback -->
   <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // If Socket.IO fails to load from the server, try loading from CDN
+    if (typeof io === 'undefined') {
+      console.warn('Socket.IO not loaded from server, trying CDN...');
+      const script = document.createElement('script');
+      script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+      script.integrity = 'sha384-/KNQL8Nu5gCHLqwqfQjA689Hhoqgi2S84SNUxC3roTe4EhJ9AfLkp8QiQcU8AMzI';
+      script.crossOrigin = 'anonymous';
+      document.head.appendChild(script);
+    }
+  </script>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -516,6 +527,7 @@
       z-index: 1000;
       opacity: 0;
       transition: opacity 0.3s;
+      pointer-events: none;
     }
     
     #message.visible {
@@ -674,11 +686,11 @@
   <div id="message"></div>
   
   <!-- Load module files in the right order -->
-  <script src="/js/modules/game-state.js"></script>
-  <script src="/js/modules/ui-manager.js"></script>
-  <script src="/js/modules/chess-manager.js"></script>
-  <script src="/js/modules/farm-manager.js"></script>
-  <script src="/js/modules/socket-manager.js"></script>
-  <script src="/js/client-core.js"></script>
+  <script src="./js/modules/game-state.js"></script>
+  <script src="./js/modules/ui-manager.js"></script>
+  <script src="./js/modules/chess-manager.js"></script>
+  <script src="./js/modules/farm-manager.js"></script>
+  <script src="./js/modules/socket-manager.js"></script>
+  <script src="./js/client-core.js"></script>
 </body>
 </html>

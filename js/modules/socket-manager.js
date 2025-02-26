@@ -147,7 +147,29 @@ const SocketManager = (() => {
       try {
         console.log('Creating socket connection');
         
-        const newSocket = io();
+        // Check if Socket.IO is available
+        if (typeof io === 'undefined') {
+          console.error('Socket.IO library not loaded');
+          showMessage('Error: Socket.IO not available. Please refresh the page.', 5000);
+          return null;
+        }
+        
+        // Log the current URL for debugging
+        console.log('Current location:', window.location.href);
+        
+        // Create socket connection with explicit URL and options
+        const socketOptions = {
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 10000
+        };
+        
+        // Use relative URL for connection to handle various deployment environments
+        const connectionUrl = window.location.protocol + '//' + window.location.host;
+        console.log('Connecting to socket server at:', connectionUrl);
+        
+        const newSocket = io(connectionUrl, socketOptions);
         connectionAttempts = 0;
         
         return newSocket;

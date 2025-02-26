@@ -4,41 +4,32 @@
 document.addEventListener('DOMContentLoaded', function() {
   console.log('DOM content loaded, starting game initialization...');
   
-  // Initialize UI first
-  UIManager.initialize();
-  
-  // Load Chess.js and then set up the game
-  loadChessLibrary(() => {
-    console.log('Chess.js library loaded successfully');
+  try {
+    // Initialize all modules in the proper order
+    console.log('Initializing UI Manager...');
+    UIManager.initialize();
     
-    // Initialize game state
+    console.log('Initializing Game State...');
     GameState.initialize();
     
-    // Set up connection to server
+    console.log('Initializing Chess Manager...');
+    ChessManager.initialize();
+    
+    console.log('Initializing Farm Manager...');
+    FarmManager.initialize();
+    
+    console.log('Initializing Socket Manager...');
     SocketManager.initialize();
     
     console.log('Game initialization complete');
-  });
-});
-
-// Load the Chess.js library dynamically
-function loadChessLibrary(callback) {
-  if (typeof Chess !== 'undefined') {
-    console.log('Chess library already loaded');
-    callback();
-    return;
+    
+    // Show a welcome message
+    showMessage('Welcome to ChessVille!', 3000);
+  } catch (error) {
+    console.error('Error during initialization:', error);
+    showMessage('Error initializing game. Check console for details.', 5000);
   }
-  
-  console.log('Loading Chess.js library...');
-  const script = document.createElement('script');
-  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js';
-  script.onload = callback;
-  script.onerror = () => {
-    console.error('Failed to load Chess.js library');
-    showMessage('Failed to load game resources. Please refresh the page.', 5000);
-  };
-  document.head.appendChild(script);
-}
+});
 
 // Global utility function to show messages to user
 function showMessage(message, duration = 3000) {
