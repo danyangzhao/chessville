@@ -1590,4 +1590,62 @@ function updateRoomInfo() {
   } catch (error) {
     console.error('Error updating room info:', error);
   }
+}
+
+// Add a special debug function to help diagnose move problems
+function debugValidMovesForSquare(row, col) {
+    // Get the piece at the specified position
+    const piece = getPieceAt(row, col);
+    if (!piece) {
+        console.log(`No piece at ${row},${col}`);
+        return;
+    }
+    
+    const squareAlgebraic = algebraicPosition(row, col);
+    console.log(`Debugging valid moves for ${piece.type} at ${squareAlgebraic} (${row},${col})`);
+    
+    // Get valid moves from the chess engine
+    try {
+        if (!gameState.chessEngine) {
+            console.error("Chess engine not initialized!");
+            return;
+        }
+        
+        // Get the raw moves from chess.js
+        const moves = gameState.chessEngine.moves({
+            square: squareAlgebraic,
+            verbose: true
+        });
+        console.log(`Raw moves from chess.js:`, moves);
+        
+        // Test converting destinations back to grid coordinates
+        moves.forEach(move => {
+            const coords = squareToCoordinates(move.to);
+            console.log(`Move to ${move.to} translates to grid [${coords.row},${coords.col}]`);
+        });
+        
+        // Log the current FEN
+        console.log(`Current FEN: ${gameState.chessEngine.fen()}`);
+        
+        // Check expected move d2-d4
+        if (squareAlgebraic === 'd2') {
+            const moveExists = moves.some(m => m.to === 'd4');
+            console.log(`Can move from d2 to d4: ${moveExists}`);
+            
+            // Try manual move
+            try {
+                const moveResult = gameState.chessEngine.move({
+                    from: 'd2',
+                    to: 'd4'
+                });
+                console.log(`Manual move result:`, moveResult);
+                // Undo the move to not affect the game
+                gameState.chessEngine.undo();
+            } catch (e) {
+                console.error(`Manual move failed:`, e);
+            }
+        }
+    } catch (e) {
+        console.error(`Error debugging moves:`, e);
+    }
 } 
