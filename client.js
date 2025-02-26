@@ -175,7 +175,11 @@ function setupSocketListeners(socket) {
   // Handle room full notification
   socket.on('roomFull', (data) => {
     console.log('Room full event received:', data);
-    showMessage(`Room ${data.roomId} is full. Try another room.`, 5000);
+    
+    // Check if data exists and has roomId property
+    const roomId = data && data.roomId ? data.roomId : 'the requested room';
+    
+    showMessage(`Room ${roomId} is full. Try another room.`, 5000);
   });
 }
 

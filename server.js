@@ -133,7 +133,7 @@ io.on('connection', (socket) => {
     
     // Check if room is full
     if (Object.keys(room.players).length >= 2) {
-      socket.emit('roomFull');
+      socket.emit('roomFull', { roomId: roomId });
       return;
     }
     
