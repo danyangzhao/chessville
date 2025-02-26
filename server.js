@@ -472,34 +472,87 @@ function isPlayerTurn(room, playerId) {
 function sendGameStart(room) {
   console.log(`Sending game start for room ${room.id}`);
   
-  // Initialize the chess engine for the room if not already initialized
-  if (!room.gameState.chessEngineState) {
-    console.log('Initializing chess engine for the room with default position');
-    const chess = new Chess();
-    room.gameState.chessEngineState = chess.fen();
+  try {
+    // Initialize the chess engine for the room if not already initialized
+    if (!room.gameState.chessEngineState) {
+      console.log('Initializing chess engine for the room with default position');
+      const chess = new Chess();
+      room.gameState.chessEngineState = chess.fen();
+    }
+    
+    // Make sure essential game state parts exist
+    if (!room.gameState.farms) {
+      console.log('Initializing farms object in game state');
+      room.gameState.farms = {
+        player1: {
+          corn: 100,
+          unlocked: 2,
+          unlockable: 3,
+          captureRequired: [],
+          totalCaptures: 0,
+          plots: []
+        },
+        player2: {
+          corn: 100,
+          unlocked: 2,
+          unlockable: 3,
+          captureRequired: [],
+          totalCaptures: 0,
+          plots: []
+        }
+      };
+    }
+    
+    console.log(`Initial chess engine state: ${room.gameState.chessEngineState}`);
+    console.log(`Current turn: ${room.currentTurn}`);
+    
+    // Find white and black players from the players object
+    const playerIds = Object.keys(room.players);
+    
+    if (playerIds.length !== 2) {
+      console.log(`Room doesn't have exactly 2 players, has ${playerIds.length} instead`);
+      return;
+    }
+    
+    // Send game start event to each player with retry logic
+    for (const playerId of playerIds) {
+      const playerColor = room.players[playerId].color;
+      console.log(`Sending game start to player ${playerId} with color ${playerColor}`);
+      
+      // First attempt
+      io.to(playerId).emit('gameStart', {
+        gameState: room.gameState,
+        currentTurn: room.currentTurn,
+        playerColor: playerColor
+      });
+      
+      // Add a delayed second attempt as a backup - sometimes the first one gets missed
+      setTimeout(() => {
+        // Check if the player is still connected
+        if (io.sockets.sockets.has(playerId)) {
+          console.log(`Sending backup game start to player ${playerId}`);
+          io.to(playerId).emit('gameStart', {
+            gameState: room.gameState,
+            currentTurn: room.currentTurn,
+            playerColor: playerColor
+          });
+        }
+      }, 1000);
+    }
+    
+    console.log('Game start sent to both players');
+    
+    // Send an initial game state update as well - belt and suspenders approach
+    setTimeout(() => {
+      io.to(room.id).emit('gameStateUpdate', {
+        gameState: room.gameState,
+        currentTurn: room.currentTurn
+      });
+      console.log(`Sent backup gameStateUpdate to room ${room.id}`);
+    }, 2000);
+  } catch (error) {
+    console.error('Error in sendGameStart:', error);
   }
-  
-  console.log(`Initial chess engine state: ${room.gameState.chessEngineState}`);
-  console.log(`Current turn: ${room.currentTurn}`);
-  
-  // Find white and black players from the players object
-  const playerIds = Object.keys(room.players);
-  
-  if (playerIds.length !== 2) {
-    console.log(`Room doesn't have exactly 2 players, has ${playerIds.length} instead`);
-    return;
-  }
-  
-  // Send game start event to each player
-  for (const playerId of playerIds) {
-    console.log(`Sending game start to player ${playerId} with color ${room.players[playerId].color}`);
-    io.to(playerId).emit('gameStart', {
-      gameState: room.gameState,
-      currentTurn: room.currentTurn
-    });
-  }
-  
-  console.log('Game start sent to both players');
 }
 
 // Start the server

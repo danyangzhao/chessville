@@ -80,30 +80,42 @@ let clientState = {
   isMyTurn: false,
   selectedPiece: null,
   selectedPlot: null,
-  selectedPlantType: 'corn' // Default selected plant type
+  selectedPlantType: 'corn', // Default selected plant type
+  connected: false,
+  connectionAttempts: 0
 };
 
-// Initialize the game when page loads
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('DOM content loaded, initializing game...');
+// Initialize the game when the page loads
+function initialize() {
+  console.log('Initializing game client...');
   
-  // Initialize screens
-  initializeScreens();
-  
-  // Initialize Socket.io connection
-  clientState.socket = io();
-  
-  // Set up event listeners
-  setupSocketListeners();
-  setupUIEventListeners();
-  
-  // Load chess.js library
-  if (typeof Chess === 'undefined') {
-    loadChessLibrary(function() {
+  try {
+    // Hide all screens initially
+    initializeScreens();
+    
+    // Set up event handlers for UI elements
+    setupEventHandlers();
+    
+    // Load chess.js library
+    loadChessJs(() => {
       console.log('Chess.js library loaded successfully');
+      
+      // Initialize Socket.io connection
+      clientState.socket = setupSocketConnection();
+      
+      if (clientState.socket) {
+        // Set up all socket event listeners
+        setupSocketListeners(clientState.socket);
+      } else {
+        console.error('Failed to initialize socket');
+        showMessage('Failed to connect to server. Please refresh the page.', 5000);
+      }
     });
+  } catch (error) {
+    console.error('Error during initialization:', error);
+    showMessage('Error initializing game. Please refresh the page.', 5000);
   }
-});
+}
 
 // Initialize screens with proper display properties
 function initializeScreens() {
@@ -133,397 +145,31 @@ function loadChessLibrary(callback) {
 }
 
 // Setup socket event listeners
-function setupSocketListeners() {
-  // Check for an existing socket
-  if (clientState.socket) {
-    console.log('Socket already exists, skipping initialization');
-    return;
-  }
-  
-  console.log('Setting up socket event listeners...');
-  
-  // Handle connection event
-  clientState.socket = io();
-  
-  clientState.socket.on('connect', () => {
-    console.log(`Connected to server with socket ID: ${clientState.socket.id}`);
-    
-    // Set the client's playerId to the socket ID by default
-    clientState.playerId = clientState.socket.id;
-    
-    // No automatic room joining here anymore - will wait for user input
-    showScreen('login-screen');
-  });
-  
-  // Handle connection error
-  clientState.socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-    showMessage('Error connecting to server. Please try again.');
-  });
-  
+function setupSocketListeners(socket) {
   // Handle player assignment
-  clientState.socket.on('playerAssigned', (data) => {
+  socket.on('playerAssigned', (data) => {
     console.log('Player assigned event received:', data);
     
-    // Save player color - make sure it's valid
-    if (data.color === 'white' || data.color === 'black') {
-      clientState.playerColor = data.color;
-    } else {
-      console.error(`Invalid color received from server: ${data.color}`);
-      // If both players are white, the second player should be black
-      if (data.color === 'white' && data.playerId !== clientState.socket.id) {
-        clientState.playerColor = 'black';
-        console.warn("Server assigned white to both players. Correcting to black for second player.");
-      } else {
-        clientState.playerColor = 'white'; // Default to white
-      }
-    }
+    // Store player information
+    clientState.playerColor = data.color;
+    clientState.roomId = data.roomId; // Store the room ID for reconnection
+    clientState.playerId = socket.id;
     
-    // Set the player ID to the one provided by the server, or fall back to socket ID
-    clientState.playerId = data.playerId || clientState.socket.id;
-    // Save room ID
-    clientState.roomId = data.roomId;
-    
-    // Log important client state for debugging
-    console.log(`Player assigned to room ${data.roomId} with color ${clientState.playerColor} and ID ${clientState.playerId}`);
-    
-    // Show waiting screen after assignment
-    showScreen('waiting-screen');
-    
-    // Update UI to show player info
+    // Update the UI to show the player's color and room ID
     updateRoomInfo();
     
-    // Show message to the player
-    showMessage(`You are playing as ${clientState.playerColor}`);
+    // Show the waiting screen
+    showScreen('waiting-screen');
+    document.getElementById('waiting-message').textContent = 
+      `You've joined room ${data.roomId} as ${data.color}. Waiting for opponent...`;
     
-    // Initialize farm based on color
-    const playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
-    console.log(`Initializing farm for ${playerKey} based on color ${clientState.playerColor}`);
-    initializePlayerFarm(playerKey);
+    showMessage(`Joined room ${data.roomId} as ${data.color}`, 3000);
   });
-  
-  // Handle connection error
-  clientState.socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-    showMessage('Error connecting to server. Please try again.');
-  });
-  
-  // Handle room full event
-  clientState.socket.on('roomFull', () => {
-    console.log('Room full event received');
-    showMessage('This room is full. Please try another room.');
-    showScreen('login-screen');
-  });
-  
-  // Handle game start
-  clientState.socket.on('gameStart', (data) => {
-    console.log('Game start event received:', data);
-    console.log('Raw game state from server:', JSON.stringify(data.gameState));
     
-    // Show a message to the user
-    showMessage('Game starting!', 3000);
-    
-    // Initialize game state
-    gameState = data.gameState;
-    
-    // Capture the current turn from the server explicitly
-    gameState.currentTurn = data.currentTurn || 'white';
-    console.log(`Current turn from server: ${gameState.currentTurn}`);
-    
-    // Set up the chess engine with the initial state
-    try {
-      if (gameState.chessEngineState) {
-        console.log('Using provided chess engine state:', gameState.chessEngineState);
-        
-        // Validate the FEN - make sure it's not an empty board
-        const boardPart = gameState.chessEngineState.split(' ')[0];
-        if (boardPart === "8/8/8/8/8/8/8/8") {
-          console.warn("Received invalid empty board FEN from server, using default position instead");
-          gameState.chessEngine = new Chess();
-          gameState.chessEngineState = gameState.chessEngine.fen();
-        } else {
-          gameState.chessEngine = new Chess(gameState.chessEngineState);
-        }
-      } else {
-        console.log('Initializing new chess engine with default position');
-        gameState.chessEngine = new Chess();
-        // Save the initial state back to the game state
-        gameState.chessEngineState = gameState.chessEngine.fen();
-      }
-      
-      console.log('Chess engine initialized successfully with FEN:', gameState.chessEngine.fen());
-      
-      // Store this initial state for potential recovery
-      gameState.previousChessEngineState = gameState.chessEngine.fen();
-    } catch (error) {
-      console.error('Error initializing chess engine:', error);
-      console.log('Attempting to initialize with default position');
-      gameState.chessEngine = new Chess();
-      gameState.chessEngineState = gameState.chessEngine.fen();
-      gameState.previousChessEngineState = gameState.chessEngine.fen();
-    }
-    
-    // Set initial turn state
-    clientState.isMyTurn = clientState.playerColor === gameState.currentTurn;
-    console.log(`Initial turn state: ${clientState.isMyTurn ? 'My turn' : 'Opponent\'s turn'}`);
-    
-    // Show game screen first 
-    showScreen('game-screen');
-    
-    // Initialize the farms 
-    initializeFarms();
-    
-    // Add a slightly longer delay for board initialization to ensure the DOM is fully ready
-    setTimeout(() => {
-      console.log('Initializing chess board after delay');
-      // Initialize the board directly instead of calling initializeChessBoard
-      updateChessBoardDisplay();
-      updateCornCounts();
-      updateTurnIndicator();
-      updateRoomInfo();
-    }, 300);
-  });
-  
-  // Handle game state updates
-  clientState.socket.on('gameStateUpdate', (data) => {
-    console.log('Game state update received:', data);
-    
-    // Save a reference to the existing config
-    const existingConfig = gameState.config;
-    // Save the current chess state before updating
-    const previousChessState = gameState.chessEngine ? gameState.chessEngine.fen() : null;
-    
-    // Update the game state
-    gameState = data.gameState;
-    gameState.previousChessEngineState = previousChessState; // Store for recovery if needed
-    
-    // Restore any previously set configuration
-    if (existingConfig) {
-        gameState.config = existingConfig;
-    }
-    
-    // Ensure properties are restored for each crop type
-    if (gameState.crops) {
-        Object.entries(gameState.crops).forEach(([cropName, crop]) => {
-            if (!crop.growthStages && defaultCropData[cropName] && defaultCropData[cropName].growthStages) {
-                console.log(`Restoring missing property growthStages for ${cropName}`);
-                crop.growthStages = defaultCropData[cropName].growthStages;
-            }
-        });
-    }
-    
-    // Store the current turn from the server
-    gameState.currentTurn = data.currentTurn;
-    console.log(`Current turn from server: ${gameState.currentTurn}`);
-    
-    // Update the chess engine with the new state
-    if (gameState.chessEngineState) {
-        console.log('Updating chess engine with state:', gameState.chessEngineState);
-        
-        // Validate the FEN - make sure it's not an empty board
-        const boardPart = gameState.chessEngineState.split(' ')[0];
-        if (boardPart === "8/8/8/8/8/8/8/8" && previousChessState) {
-            console.warn("Received empty board FEN from server, using previous state instead");
-            gameState.chessEngineState = previousChessState;
-        }
-        
-        try {
-            // Create a new chess engine instance with the FEN state from the server
-            gameState.chessEngine = new Chess(gameState.chessEngineState);
-            
-            // Check if the chess engine turn matches the game state turn
-            const chessEngineTurn = gameState.chessEngine.turn();
-            const expectedTurn = gameState.currentTurn === 'white' ? 'w' : 'b';
-            console.log(`Chess engine turn: ${chessEngineTurn}, Expected: ${expectedTurn}`);
-            
-            // If there's a mismatch, we need to fix it safely
-            if (chessEngineTurn !== expectedTurn) {
-                console.warn(`Turn mismatch detected! Will create a fixed chess engine state.`);
-                
-                // Get the current position from the chess engine
-                const position = gameState.chessEngine.fen();
-                
-                // Check if we have a valid board with pieces first
-                const currentBoardPart = position.split(' ')[0];
-                if (currentBoardPart === "8/8/8/8/8/8/8/8" && previousChessState) {
-                    // The current board is empty but we have a previous state - recover from that
-                    console.log(`Current board is empty, recovering from previous state: ${previousChessState}`);
-                    
-                    try {
-                        // Use the previous state but with the correct turn
-                        const prevParts = previousChessState.split(' ');
-                        prevParts[1] = expectedTurn; // Update the turn
-                        const recoveredFen = prevParts.join(' ');
-                        
-                        // Verify this is a valid FEN before using it
-                        const testEngine = new Chess(recoveredFen);
-                        if (testEngine.validate_fen(recoveredFen).valid) {
-                            gameState.chessEngine = testEngine;
-                            gameState.chessEngineState = recoveredFen;
-                            console.log(`Successfully recovered chess engine with pieces: ${recoveredFen}`);
-                        } else {
-                            throw new Error("Invalid recovered FEN");
-                        }
-                    } catch (err) {
-                        console.error(`Recovery failed: ${err}, initializing new game`);
-                        // Last resort - initialize a new chess game
-                        gameState.chessEngine = new Chess();
-                        gameState.chessEngineState = gameState.chessEngine.fen();
-                    }
-                } else {
-                    // We have a board with pieces, just need to fix the turn
-                    // Safely update just the turn portion (the second part when split by spaces)
-                    const parts = position.split(' ');
-                    if (parts.length >= 2) {
-                        parts[1] = expectedTurn;
-                        const fixedFen = parts.join(' ');
-                        console.log(`Original FEN: ${position}`);
-                        console.log(`Fixed FEN: ${fixedFen}`);
-                        
-                        // Create a new chess engine with the fixed FEN
-                        try {
-                            const fixedEngine = new Chess(fixedFen);
-                            
-                            // Verify that the fixed engine has pieces and is valid
-                            if (fixedEngine.validate_fen(fixedFen).valid) {
-                                const boardString = fixedEngine.fen().split(' ')[0];
-                                if (boardString !== "8/8/8/8/8/8/8/8") {
-                                    console.log(`Fixed engine created successfully with pieces on the board`);
-                                    gameState.chessEngine = fixedEngine;
-                                    gameState.chessEngineState = fixedFen;
-                                } else {
-                                    throw new Error("Fixed engine has empty board");
-                                }
-                            } else {
-                                throw new Error("Invalid fixed FEN");
-                            }
-                        } catch (err) {
-                            console.error(`Error creating fixed engine: ${err}. Trying alternative recovery.`);
-                            
-                            // Try to recover from the previous state if available
-                            if (previousChessState) {
-                                try {
-                                    const prevParts = previousChessState.split(' ');
-                                    prevParts[1] = expectedTurn; // Fix the turn
-                                    const recoveryFen = prevParts.join(' ');
-                                    
-                                    // Verify this is valid before using
-                                    const testEngine = new Chess(recoveryFen);
-                                    if (testEngine.validate_fen(recoveryFen).valid) {
-                                        gameState.chessEngine = testEngine;
-                                        gameState.chessEngineState = recoveryFen;
-                                        console.log(`Recovered chess engine from previous state with turn fixed`);
-                                    } else {
-                                        throw new Error("Invalid recovery FEN");
-                                    }
-                                } catch (e) {
-                                    console.error(`All recovery attempts failed: ${e}. Initializing new game.`);
-                                    gameState.chessEngine = new Chess();
-                                    gameState.chessEngineState = gameState.chessEngine.fen();
-                                }
-                            } else {
-                                console.error("No previous state available for recovery. Initializing new game.");
-                                gameState.chessEngine = new Chess();
-                                gameState.chessEngineState = gameState.chessEngine.fen();
-                            }
-                        }
-                    }
-                }
-            }
-            
-            console.log('Chess engine updated successfully, FEN:', gameState.chessEngine.fen());
-        } catch (error) {
-            console.error('Error updating chess engine:', error);
-            // If there's an error, try the previous state or initialize with default position
-            if (previousChessState) {
-                try {
-                    console.log(`Trying to recover with previous state: ${previousChessState}`);
-                    gameState.chessEngine = new Chess(previousChessState);
-                    gameState.chessEngineState = previousChessState;
-                } catch (e) {
-                    console.error(`Recovery failed: ${e}`);
-                    gameState.chessEngine = new Chess();
-                    gameState.chessEngineState = gameState.chessEngine.fen();
-                }
-            } else {
-                gameState.chessEngine = new Chess();
-                gameState.chessEngineState = gameState.chessEngine.fen();
-            }
-        }
-    } else {
-        console.warn('No chess engine state received from server, initializing with default position');
-        gameState.chessEngine = new Chess();
-        gameState.chessEngineState = gameState.chessEngine.fen();
-    }
-    
-    // Update turn state
-    const previousTurnState = clientState.isMyTurn;
-    clientState.isMyTurn = clientState.playerColor === data.currentTurn;
-    console.log(`Turn updated: Was ${previousTurnState ? 'my turn' : 'not my turn'} -> Now ${clientState.isMyTurn ? 'my turn' : 'not my turn'}`);
-    console.log(`Player color: ${clientState.playerColor}, Current turn: ${data.currentTurn}, Is my turn: ${clientState.isMyTurn}`);
-    
-    // Get the proper player key for farm initialization
-    const playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
-    console.log(`Reinitializing farm for ${playerKey} after game state update`);
-    initializePlayerFarm(playerKey);
-
-    // Check for any capture-unlocked plots that may have changed
-    if (gameState.players && gameState.players[clientState.playerId] && gameState.players[clientState.playerId].farm) {
-        const farm = gameState.players[clientState.playerId].farm;
-        for (let i = 0; i < farm.plots.length; i++) {
-            if (farm.plots[i].state === 'unlocked' && farm.plots[i].unlockSource === 'capture') {
-                console.log(`Plot ${i} was unlocked due to a capture!`);
-                // You could add a UI notification here
-            }
-        }
-    }
-
-    // Update the UI
-    updateCornCounts();
-    updateChessBoardDisplay();
-  });
-  
-  // Handle game over
-  clientState.socket.on('gameOver', (data) => {
-    console.log('Game over:', data);
-    
-    // Show game over message
-    const isWinner = data.winner === clientState.playerId;
-    const message = isWinner ? 
-      `You won! ${data.reason === 'corn' ? 'You collected 200 corn!' : 'You checkmated your opponent!'}` :
-      `You lost. ${data.reason === 'corn' ? 'Your opponent collected 200 corn.' : 'Your king was checkmated.'}`;
-    
-    showVictoryBanner(isWinner, message);
-  });
-  
-  // Handle opponent leaving
-  clientState.socket.on('opponentLeft', () => {
-    console.log('Opponent left the game');
-    showMessage('Your opponent has left the game.');
-  });
-
-  // Add handler for config updates
-  clientState.socket.on('configUpdate', (data) => {
-    console.log('Game configuration update received:', data);
-    
-    // Update the game config with the new values
-    if (data.config) {
-      gameState.config = data.config;
-      console.log('Game configuration updated to version:', data.version);
-      
-      // If we're in a game, update the UI to reflect any immediate changes
-      if (gameState.farms) {
-        // Refresh farm displays
-        initializePlayerFarm('player1');
-        initializePlayerFarm('player2');
-        
-        // Update other UI elements
-        updateCornCounts();
-        
-        // Show notification
-        showMessage('Game configuration has been updated!');
-      }
-    }
+  // Handle room full notification
+  socket.on('roomFull', (data) => {
+    console.log('Room full event received:', data);
+    showMessage(`Room ${data.roomId} is full. Try another room.`, 5000);
   });
 }
 
@@ -2069,7 +1715,7 @@ function handleUnlockAction(index, playerKey) {
     }
     updateCornCounts();
     
-    console.log(`Unlocked plot ${index}. New corn: ${gameState.farms[playerKeyMapped].corn}`);
+    console.log(`Unlocked plot ${index}. New corn: ${gameState.farms[playerKey].corn}`);
     showMessage(`Unlocked plot for ${unlockCost} corn!`);
     
     // End turn after a short delay
@@ -2084,4 +1730,101 @@ function handleUnlockAction(index, playerKey) {
   } else {
     showMessage(`Not enough corn! You need ${unlockCost} corn to unlock this plot.`);
   }
-} 
+}
+
+// Setup socket connection
+function setupSocketConnection() {
+  try {
+    console.log('Setting up socket connection');
+    // Create socket connection
+    const socket = io();
+    
+    // Store socket in client state
+    clientState.socket = socket;
+    clientState.connectionAttempts = 0;
+    
+    // Socket connection event handlers
+    socket.on('connect', () => {
+      console.log('Connected to server with socket ID:', socket.id);
+      clientState.connected = true;
+      clientState.connectionAttempts = 0;
+      clientState.playerId = socket.id;
+      
+      showMessage('Connected to server', 2000);
+      
+      // If we have a saved room ID, try to rejoin on reconnection
+      if (clientState.roomId) {
+        console.log(`Attempting to rejoin room ${clientState.roomId} after reconnect`);
+        
+        // Emit joinGame event with roomId
+        socket.emit('joinGame', { roomId: clientState.roomId });
+        showMessage(`Reconnecting to game ${clientState.roomId}...`, 3000);
+      }
+    });
+    
+    // Handle connection errors
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+      clientState.connected = false;
+      clientState.connectionAttempts++;
+      
+      if (clientState.connectionAttempts <= 3) {
+        showMessage(`Connection error: ${error.message}. Retrying...`, 3000);
+      } else {
+        showMessage(`Unable to connect to server after ${clientState.connectionAttempts} attempts. Please check your connection.`, 5000);
+      }
+    });
+    
+    // Handle disconnections
+    socket.on('disconnect', (reason) => {
+      console.log('Disconnected from server:', reason);
+      clientState.connected = false;
+      
+      if (reason === 'io server disconnect') {
+        // The server has forcefully disconnected the socket
+        showMessage('Disconnected by server. Attempting to reconnect...', 3000);
+        socket.connect();
+      } else {
+        // Other disconnection reasons (transport close, etc.)
+        showMessage('Connection lost. Attempting to reconnect...', 3000);
+      }
+    });
+    
+    // Handle reconnection
+    socket.on('reconnect', (attemptNumber) => {
+      console.log(`Reconnected after ${attemptNumber} attempts`);
+      showMessage('Reconnected to server', 2000);
+      
+      // If we were in a game, try to rejoin
+      if (clientState.roomId) {
+        console.log(`Attempting to rejoin room ${clientState.roomId} after reconnect`);
+        socket.emit('joinGame', { roomId: clientState.roomId });
+        showMessage(`Reconnecting to game ${clientState.roomId}...`, 3000);
+      }
+    });
+    
+    // Handle reconnection error
+    socket.on('reconnect_error', (error) => {
+      console.error('Reconnection error:', error);
+      showMessage(`Reconnection error: ${error.message}`, 3000);
+    });
+    
+    // Handle reconnection failed
+    socket.on('reconnect_failed', () => {
+      console.error('Failed to reconnect');
+      showMessage('Failed to reconnect to server. Please refresh the page.', 5000);
+    });
+    
+    return socket;
+  } catch (error) {
+    console.error('Error setting up socket connection:', error);
+    showMessage('Error connecting to server. Please refresh the page.', 5000);
+    return null;
+  }
+}
+
+// Add event listener for DOMContentLoaded to start the initialization process
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM content loaded, starting game initialization...');
+  initialize();
+}); 
