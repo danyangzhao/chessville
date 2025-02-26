@@ -310,6 +310,27 @@ function setupSocketListeners() {
       console.log('Updating chess engine with state:', gameState.chessEngineState);
       try {
         gameState.chessEngine = new Chess(gameState.chessEngineState);
+        
+        // IMPORTANT FIX: Make sure the chess engine's turn matches the game state turn
+        const chessEngineTurn = gameState.chessEngine.turn();
+        const expectedTurn = gameState.currentTurn === 'white' ? 'w' : 'b';
+        console.log(`Chess engine turn: ${chessEngineTurn}, Expected: ${expectedTurn}`);
+        
+        // If there's a mismatch, force the correct turn
+        if (chessEngineTurn !== expectedTurn) {
+          console.warn(`Turn mismatch detected! Fixing chess engine turn.`);
+          // We need to create a custom FEN with the correct turn
+          const fen = gameState.chessEngine.fen();
+          const fenParts = fen.split(' ');
+          fenParts[1] = expectedTurn; // Set the correct turn
+          const correctedFen = fenParts.join(' ');
+          console.log(`Corrected FEN: ${correctedFen}`);
+          
+          // Reinitialize the chess engine with the corrected FEN
+          gameState.chessEngine = new Chess(correctedFen);
+          gameState.chessEngineState = correctedFen;
+        }
+        
         console.log('Chess engine updated successfully, FEN:', gameState.chessEngine.fen());
       } catch (error) {
         console.error('Error updating chess engine:', error);
@@ -1474,6 +1495,34 @@ function isMyTurn() {
   // First check the client state flag
   if (clientState.isMyTurn !== undefined) {
     console.log(`Checking turn using clientState.isMyTurn: ${clientState.isMyTurn}, Player color: ${clientState.playerColor}`);
+    
+    // ADDED VALIDATION: Make sure chess engine state matches client state
+    if (gameState.chessEngine) {
+      const chessEngineTurn = gameState.chessEngine.turn();
+      const expectedTurn = clientState.playerColor === 'white' ? 'w' : 'b';
+      
+      if ((chessEngineTurn === 'w' && clientState.playerColor === 'white' && clientState.isMyTurn) ||
+          (chessEngineTurn === 'b' && clientState.playerColor === 'black' && clientState.isMyTurn)) {
+        // All good, states match
+        return clientState.isMyTurn;
+      } else if (clientState.isMyTurn) {
+        // There's a turn mismatch that needs to be fixed
+        console.warn(`Turn state mismatch! Client thinks it's ${clientState.playerColor}'s turn but chess engine says it's ${chessEngineTurn === 'w' ? 'white' : 'black'}'s turn`);
+        
+        // Fix the chess engine turn
+        const fen = gameState.chessEngine.fen();
+        const fenParts = fen.split(' ');
+        fenParts[1] = expectedTurn;
+        const correctedFen = fenParts.join(' ');
+        
+        console.log(`Correcting chess engine state to: ${correctedFen}`);
+        gameState.chessEngine = new Chess(correctedFen);
+        gameState.chessEngineState = correctedFen;
+        
+        return true;
+      }
+    }
+    
     return clientState.isMyTurn;
   }
   
