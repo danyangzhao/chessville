@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
   initializeScreens();
   
   // Initialize Socket.io connection
-  clientState.socket = io(window.location.origin);
+  clientState.socket = io();
   
   // Set up event listeners
   setupSocketListeners();
@@ -132,13 +132,28 @@ function loadChessLibrary(callback) {
   document.head.appendChild(script);
 }
 
-// Set up Socket.io event listeners
+// Setup socket event listeners
 function setupSocketListeners() {
-  console.log('Setting up socket listeners');
+  // Check for an existing socket
+  if (clientState.socket) {
+    console.log('Socket already exists, skipping initialization');
+    return;
+  }
+  
+  console.log('Setting up socket event listeners...');
   
   // Handle connection event
+  clientState.socket = io();
+  
   clientState.socket.on('connect', () => {
-    console.log('Connected to server with socket ID:', clientState.socket.id);
+    console.log(`Connected to server with socket ID: ${clientState.socket.id}`);
+    
+    // Set the client's playerId to the socket ID by default
+    clientState.playerId = clientState.socket.id;
+    
+    // Join a room with ID 123 (hardcoded for simplicity)
+    const roomId = '123';
+    clientState.socket.emit('joinRoom', { roomId });
   });
   
   // Handle connection error
@@ -149,18 +164,40 @@ function setupSocketListeners() {
   
   // Handle player assignment
   clientState.socket.on('playerAssigned', (data) => {
-    console.log('Player assigned:', data);
+    console.log('Player assigned event received:', data);
     
-    // Store player data
-    clientState.playerColor = data.color;
+    // Save player color - make sure it's valid
+    if (data.color === 'white' || data.color === 'black') {
+      clientState.playerColor = data.color;
+    } else {
+      console.error(`Invalid color received from server: ${data.color}`);
+      // If both players are white, the second player should be black
+      if (data.color === 'white' && data.playerId !== clientState.socket.id) {
+        clientState.playerColor = 'black';
+        console.warn("Server assigned white to both players. Correcting to black for second player.");
+      } else {
+        clientState.playerColor = 'white'; // Default to white
+      }
+    }
+    
+    // Set the player ID to the one provided by the server, or fall back to socket ID
+    clientState.playerId = data.playerId || clientState.socket.id;
+    // Save room ID
     clientState.roomId = data.roomId;
-    clientState.playerId = data.playerId || clientState.socket.id; // Set playerId to socket.id if not provided
     
-    console.log(`Assigned as player ${clientState.playerId} with color ${clientState.playerColor} in room ${clientState.roomId}`);
+    // Log important client state for debugging
+    console.log(`Player assigned to room ${data.roomId} with color ${clientState.playerColor} and ID ${clientState.playerId}`);
     
-    // Show waiting screen and update room info
-    showScreen('waiting-screen');
+    // Update UI to show player info
     updateRoomInfo();
+    
+    // Show message to the player
+    showMessage(`You are playing as ${clientState.playerColor}`);
+    
+    // Initialize farm based on color
+    const playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
+    console.log(`Initializing farm for ${playerKey} based on color ${clientState.playerColor}`);
+    initializePlayerFarm(playerKey);
   });
   
   // Handle room full event
@@ -547,54 +584,74 @@ function initializeFarms() {
   initializePlayerFarm(playerKey);
 }
 
-// Initialize a player's farm
+// Initialize farm for specific player
 function initializePlayerFarm(playerKey) {
-  const farmContainer = document.getElementById('my-farm');
-  if (!farmContainer) {
-    console.error('Farm container not found');
-    return;
+  console.log(`Initializing farm for ${playerKey} with player color ${clientState.playerColor}`);
+  
+  // If playerKey is null, determine it from player color
+  if (!playerKey) {
+    if (clientState.playerColor === 'white') {
+      playerKey = 'player1';
+    } else if (clientState.playerColor === 'black') {
+      playerKey = 'player2';
+    } else {
+      console.error(`Cannot initialize farm: Invalid player color: ${clientState.playerColor}`);
+      return;
+    }
+    console.log(`Determined playerKey as ${playerKey} based on color ${clientState.playerColor}`);
+  } else {
+    // Validate that the provided playerKey matches the player's color
+    const expectedKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
+    if (playerKey !== expectedKey) {
+      console.warn(`Provided playerKey ${playerKey} doesn't match player color ${clientState.playerColor}. Using ${expectedKey} instead.`);
+      playerKey = expectedKey;
+    }
   }
   
-  // If playerKey is null or undefined, use the client's actual player key
-  if (!playerKey) {
-    console.warn('PlayerKey is null, using color-based player key');
-    playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
+  // Make sure farm container exists
+  const farmContainer = document.getElementById(`${playerKey}-farm`);
+  if (!farmContainer) {
+    console.error(`Farm container for ${playerKey} not found`);
+    return;
   }
   
   // Clear existing farm
   farmContainer.innerHTML = '';
   
-  // Get farm data
-  const farm = gameState.farms[playerKey];
-  if (!farm) {
-    console.error(`Farm data not found for ${playerKey}`);
+  // Make sure the game state and farm data exist
+  if (!gameState || !gameState.farms || !gameState.farms[playerKey]) {
+    console.error(`Game state or farm data for ${playerKey} not found`);
     return;
   }
   
-  console.log(`Initializing farm for ${playerKey} with ${farm.plots.length} plots`);
+  const farmData = gameState.farms[playerKey];
+  const numPlots = farmData.plots.length;
+  
+  console.log(`Initializing farm for ${playerKey} with ${numPlots} plots`);
   
   // Create farm plots
-  for (let i = 0; i < farm.plots.length; i++) {
-    const plot = document.createElement('div');
-    plot.className = 'farm-plot';
-    plot.dataset.index = i;
-    plot.dataset.player = playerKey;
+  for (let i = 0; i < numPlots; i++) {
+    const plotData = farmData.plots[i];
+    const plotElement = document.createElement('div');
+    plotElement.className = 'farm-plot';
+    plotElement.dataset.index = i;
+    plotElement.dataset.player = playerKey;
     
-    // Set plot state
-    updatePlotDisplay(plot, farm.plots[i]);
+    // Update plot appearance based on state
+    updatePlotDisplay(plotElement, plotData);
     
-    // Add click event listener
-    plot.addEventListener('click', handleFarmPlotClick);
+    // Add click event listener if it's the player's farm
+    const isMyFarm = (playerKey === 'player1' && clientState.playerColor === 'white') || 
+                      (playerKey === 'player2' && clientState.playerColor === 'black');
+                      
+    if (isMyFarm) {
+      plotElement.addEventListener('click', handleFarmPlotClick);
+    }
     
-    // Log the plot's actions
-    const actions = plot.querySelectorAll('.plot-action');
-    console.log(`Plot ${i} has ${actions.length} action buttons`);
-    
-    farmContainer.appendChild(plot);
+    farmContainer.appendChild(plotElement);
   }
   
-  console.log(`Farm initialized with ${farm.plots.length} plots`);
-  updateCornCounts();
+  console.log(`Farm initialized with ${numPlots} plots`);
 }
 
 // Update the chess board display
@@ -1105,15 +1162,24 @@ function handlePlantAction(index, playerKey, plantType = 'corn') {
 
 // Update corn counts
 function updateCornCounts() {
-  const myColor = clientState.playerColor;
-  const myKey = myColor === 'white' ? 'player1' : 'player2';
-  
-  const myCornElement = document.getElementById('my-corn');
-  
-  if (myCornElement && gameState.farms && gameState.farms[myKey]) {
-    myCornElement.textContent = gameState.farms[myKey].corn;
-    console.log(`Updated corn count: ${gameState.farms[myKey].corn}`);
+  if (!gameState || !gameState.farms) {
+    console.log("Cannot update corn counts - game state or farms not initialized");
+    return;
   }
+  
+  // Update player 1 (white) corn count
+  const player1Corn = document.getElementById('player1-corn');
+  if (player1Corn && gameState.farms.player1) {
+    player1Corn.textContent = gameState.farms.player1.corn;
+  }
+  
+  // Update player 2 (black) corn count
+  const player2Corn = document.getElementById('player2-corn');
+  if (player2Corn && gameState.farms.player2) {
+    player2Corn.textContent = gameState.farms.player2.corn;
+  }
+  
+  console.log(`Updated corn count: White: ${gameState.farms.player1?.corn}, Black: ${gameState.farms.player2?.corn}`);
 }
 
 // Update turn indicator
@@ -1694,23 +1760,42 @@ function showVictoryBanner(isWinner, message) {
 
 // Update room info display in the game screen
 function updateRoomInfo() {
-  try {
-    // Update room ID display
-    const roomIdDisplays = document.querySelectorAll('#room-id-display');
-    roomIdDisplays.forEach(elem => {
-      if (elem) elem.textContent = clientState.roomId || 'Unknown';
-    });
-    
-    // Update player color display
-    const playerColorDisplays = document.querySelectorAll('#player-color');
-    playerColorDisplays.forEach(elem => {
-      if (elem) elem.textContent = clientState.playerColor || 'Unknown';
-    });
-    
-    console.log(`Updated room info: Room ID: ${clientState.roomId}, Player Color: ${clientState.playerColor}`);
-  } catch (error) {
-    console.error('Error updating room info:', error);
+  // Update room ID
+  const roomIdDisplay = document.getElementById('room-id-display');
+  if (roomIdDisplay) {
+    roomIdDisplay.textContent = clientState.roomId || 'None';
   }
+  
+  // Update player color
+  const playerColorDisplay = document.getElementById('player-color');
+  if (playerColorDisplay) {
+    playerColorDisplay.textContent = clientState.playerColor || 'Not assigned';
+    
+    // Update color indicator
+    if (clientState.playerColor === 'white') {
+      playerColorDisplay.classList.add('white-player');
+      playerColorDisplay.classList.remove('black-player');
+    } else if (clientState.playerColor === 'black') {
+      playerColorDisplay.classList.add('black-player');
+      playerColorDisplay.classList.remove('white-player');
+    }
+  }
+  
+  // Highlight the player's farm header
+  const player1Header = document.getElementById('player1-header');
+  const player2Header = document.getElementById('player2-header');
+  
+  if (player1Header && player2Header) {
+    if (clientState.playerColor === 'white') {
+      player1Header.classList.add('my-farm-header');
+      player2Header.classList.remove('my-farm-header');
+    } else if (clientState.playerColor === 'black') {
+      player2Header.classList.add('my-farm-header');
+      player1Header.classList.remove('my-farm-header');
+    }
+  }
+  
+  console.log(`Room info updated: Room ${clientState.roomId}, Player color: ${clientState.playerColor}`);
 }
 
 // Add a special debug function to help diagnose move problems
