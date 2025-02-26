@@ -152,7 +152,7 @@ function setupSocketListeners(socket) {
     
     // Store player information
     clientState.playerColor = data.color;
-    clientState.roomId = data.roomId; // Store the room ID for reconnection
+    clientState.roomId = data.roomId;
     clientState.playerId = socket.id;
     
     // Update the UI to show the player's color and room ID
@@ -160,8 +160,14 @@ function setupSocketListeners(socket) {
     
     // Show the waiting screen
     showScreen('waiting-screen');
-    document.getElementById('waiting-message').textContent = 
-      `You've joined room ${data.roomId} as ${data.color}. Waiting for opponent...`;
+    
+    // Check if the element exists before trying to update it
+    const waitingMessage = document.getElementById('waiting-message');
+    if (waitingMessage) {
+      waitingMessage.textContent = `You've joined room ${data.roomId} as ${data.color}. Waiting for opponent...`;
+    } else {
+      console.warn('Warning: waiting-message element not found in DOM');
+    }
     
     showMessage(`Joined room ${data.roomId} as ${data.color}`, 3000);
   });
