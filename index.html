@@ -546,6 +546,30 @@
       padding: 10px 20px;
       font-size: 18px;
     }
+    
+    .turn-indicator {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 10px 0;
+      padding: 5px;
+      text-align: center;
+      border-radius: 5px;
+    }
+    
+    .white-turn {
+      background-color: #f0f0f0;
+      color: #000;
+    }
+    
+    .black-turn {
+      background-color: #333;
+      color: #fff;
+    }
+    
+    .active-turn {
+      border: 2px solid #4CAF50;
+      box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+    }
   </style>
 </head>
 <body>
@@ -649,7 +673,12 @@
   <!-- Message Display -->
   <div id="message"></div>
   
-  <!-- Client-side JavaScript -->
-  <script src="client.js"></script>
+  <!-- Load module files in the right order -->
+  <script src="/js/modules/game-state.js"></script>
+  <script src="/js/modules/ui-manager.js"></script>
+  <script src="/js/modules/chess-manager.js"></script>
+  <script src="/js/modules/farm-manager.js"></script>
+  <script src="/js/modules/socket-manager.js"></script>
+  <script src="/js/client-core.js"></script>
 </body>
 </html>

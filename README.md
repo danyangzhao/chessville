@@ -69,7 +69,13 @@ A multiplayer chess game with a farming twist! Move chess pieces, capture oppone
 The game consists of three main components:
 
 1. **Server (`server.js`)**: Handles game state, player connections, and game logic
-2. **Client (`client.js`)**: Manages the user interface and client-side game logic
+2. **Client Modules**:
+   - `client-core.js`: Entry point and initialization
+   - `game-state.js`: Game state management
+   - `ui-manager.js`: UI interactions and screen management
+   - `chess-manager.js`: Chess board interactions
+   - `socket-manager.js`: Server communication
+   - `farm-manager.js`: Farm mechanics
 3. **HTML/CSS (`index.html`)**: Provides the game interface and styling
 
 ## Development

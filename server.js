@@ -366,6 +366,48 @@ io.on('connection', (socket) => {
       }
     }
   });
+
+  // Handle client making a move
+  socket.on('makeMove', (data) => {
+    console.log(`Player ${socket.id} making move: ${data.from} to ${data.to} in room ${data.roomId}`);
+    
+    // Find the room
+    const room = gameRooms[data.roomId];
+    if (!room) {
+      console.error(`Room ${data.roomId} not found`);
+      return;
+    }
+    
+    // Update the game state
+    // ...
+    
+    // Broadcast updated game state to all players in the room
+    io.to(data.roomId).emit('gameStateUpdate', {
+      gameState: room.gameState,
+      currentTurn: room.currentTurn
+    });
+  });
+
+  // Handle client updating game state (for farm actions)
+  socket.on('updateGameState', (data) => {
+    console.log(`Player ${socket.id} updating game state in room ${data.roomId}`);
+    
+    // Find the room
+    const room = gameRooms[data.roomId];
+    if (!room) {
+      console.error(`Room ${data.roomId} not found`);
+      return;
+    }
+    
+    // Update the game state (server should validate this data before accepting it)
+    // ...
+    
+    // Broadcast updated game state to all players in the room
+    io.to(data.roomId).emit('gameStateUpdate', {
+      gameState: room.gameState,
+      currentTurn: room.currentTurn
+    });
+  });
 });
 
 // Initialize game state
