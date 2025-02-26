@@ -716,37 +716,28 @@ function updateChessBoardDisplay() {
 
 // Display valid moves for the selected piece
 function displayValidMoves() {
-  if (!clientState.selectedPiece) return;
-  
-  // Clear any previous highlighting first
-  document.querySelectorAll('.chess-square.valid-move, .chess-square.valid-capture').forEach(el => {
-    el.classList.remove('valid-move', 'valid-capture');
+  // Clear any existing valid move indicators
+  document.querySelectorAll('.chess-square.valid-move, .chess-square.valid-capture').forEach(square => {
+    square.classList.remove('valid-move', 'valid-capture');
   });
-  
-  // Get the algebraic position of the selected piece
-  const fromAlgebraic = algebraicPosition(clientState.selectedPiece.row, clientState.selectedPiece.col);
-  
-  // Get valid moves directly from the chess engine
-  const validMoves = gameState.chessEngine.moves({
-    square: fromAlgebraic,
-    verbose: true
-  });
-  
-  console.log("Valid moves:", validMoves.map(move => `${move.from}->${move.to}`));
-  
-  // Highlight valid moves
+
+  if (!clientState.selectedPiece || !gameState.chessEngine) {
+    return;
+  }
+
+  // Get valid moves from the chess engine
+  const validMoves = getValidMoves();
+
+  // Highlight valid move squares
   validMoves.forEach(move => {
-    // Convert algebraic destination to row/col
     const coords = squareToCoordinates(move.to);
-    const targetSquare = document.getElementById(`square-${coords.row}-${coords.col}`);
+    const square = document.getElementById(`square-${coords.row}-${coords.col}`);
     
-    if (targetSquare) {
+    if (square) {
       if (move.captured) {
-        targetSquare.classList.add('valid-capture');
-        console.log(`Highlighting valid capture at ${coords.row},${coords.col} (${move.to})`);
+        square.classList.add('valid-capture');
       } else {
-        targetSquare.classList.add('valid-move');
-        console.log(`Highlighting valid move at ${coords.row},${coords.col} (${move.to})`);
+        square.classList.add('valid-move');
       }
     }
   });
@@ -1185,6 +1176,7 @@ function handleChessSquareClick(event) {
     
     // Check if this is a valid move
     const validMoves = getValidMoves();
+    console.log("Valid moves:", validMoves);
     const moveToMake = validMoves.find(move => move.from === from && move.to === position);
     
     if (moveToMake) {
@@ -1215,24 +1207,25 @@ function handleChessSquareClick(event) {
           // Check if the move was a capture
           const isCapture = move.captured ? true : false;
           
-          // Update corn for the move cost
+          // Update corn for the move cost - just use a fixed cost instead of piece-specific cost for simplicity
           const moveCost = isCapture ? 10 : 5;
           
           // Update the player's corn count
           const playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
           gameState.farms[playerKey].corn -= moveCost;
           
-          // Store the current fen for recovery
-          const currentFen = gameState.chessEngine.fen();
+          // Store the current chess state for recovery
+          gameState.previousChessEngineState = newState;
           
           // Send the move to the server
-          console.log(`Sending chess move to server. New FEN: ${currentFen}`);
+          // Keep the chess engine turn as is - the server will handle the turn switching
+          console.log(`Sending chess move to server. New FEN: ${newState}`);
           clientState.socket.emit('gameAction', {
             type: 'movePiece',
             from: from,
             to: position,
             isCapture: isCapture,
-            chessEngineState: currentFen
+            chessEngineState: newState
           });
           
           // Reset selection state
@@ -1247,15 +1240,12 @@ function handleChessSquareClick(event) {
             showMessage(`Captured a piece! +5 corn cost for capture.`);
           }
           
-          // Auto-end turn if enabled and game is not in check/checkmate
-          const autoEndTurn = gameState.config?.gameplay?.autoEndTurn || false;
-          if (autoEndTurn && !gameState.chessEngine.in_check() && !gameState.chessEngine.in_checkmate()) {
-            setTimeout(() => {
-              if (isMyTurn()) {
-                endTurn();
-              }
-            }, 1000);
-          }
+          // Auto-end turn after a short delay
+          setTimeout(() => {
+            if (isMyTurn()) {
+              endTurn();
+            }
+          }, 1000);
         } else {
           console.error("Move failed");
           resetSelectionState();
@@ -1479,30 +1469,17 @@ function getValidMoves() {
   }
 }
 
-// Convert row/col to algebraic notation
+// Convert row/col to algebraic notation (e.g., "e4")
 function algebraicPosition(row, col) {
-  const files = 'abcdefgh';
-  const ranks = '87654321';
-  
-  // If playing as black and the board is visually flipped, adjust coordinates
-  if (clientState.playerColor === 'black') {
-    // Fixing the mapping for black player perspective
-    return files[col] + ranks[row];
-  } else {
-    return files[col] + ranks[row];
-  }
+  const file = String.fromCharCode('a'.charCodeAt(0) + col);
+  const rank = 8 - row;
+  return file + rank;
 }
 
 // Convert algebraic notation to row/col
 function squareToCoordinates(square) {
-  const files = 'abcdefgh';
-  const ranks = '87654321';
-  
-  const col = files.indexOf(square[0]);
-  const row = ranks.indexOf(square[1]);
-  
-  console.log(`Converting algebraic ${square} to row/col: ${row},${col}`);
-  
+  const col = square.charCodeAt(0) - 'a'.charCodeAt(0);
+  const row = 8 - parseInt(square.charAt(1));
   return { row, col };
 }
 
@@ -1555,48 +1532,38 @@ function showScreen(screenId) {
 
 // Check if it's the current player's turn
 function isMyTurn() {
-  // First check the client state flag
-  if (clientState.isMyTurn !== undefined) {
-    console.log(`Checking turn using clientState.isMyTurn: ${clientState.isMyTurn}, Player color: ${clientState.playerColor}`);
-    
-    // ADDED VALIDATION: Make sure chess engine state matches client state
-    if (gameState.chessEngine) {
-      const chessEngineTurn = gameState.chessEngine.turn();
-      const expectedTurn = clientState.playerColor === 'white' ? 'w' : 'b';
-      
-      if ((chessEngineTurn === 'w' && clientState.playerColor === 'white' && clientState.isMyTurn) ||
-          (chessEngineTurn === 'b' && clientState.playerColor === 'black' && clientState.isMyTurn)) {
-        // All good, states match
-        return clientState.isMyTurn;
-      } else if (clientState.isMyTurn) {
-        // There's a turn mismatch that needs to be fixed
-        console.warn(`Turn state mismatch! Client thinks it's ${clientState.playerColor}'s turn but chess engine says it's ${chessEngineTurn === 'w' ? 'white' : 'black'}'s turn`);
-        
-        // Fix the chess engine turn
-        const fen = gameState.chessEngine.fen();
-        const fenParts = fen.split(' ');
-        fenParts[1] = expectedTurn;
-        const correctedFen = fenParts.join(' ');
-        
-        console.log(`Correcting chess engine state to: ${correctedFen}`);
-        gameState.chessEngine = new Chess(correctedFen);
-        gameState.chessEngineState = correctedFen;
-        
-        return true;
-      }
-    }
-    
-    return clientState.isMyTurn;
+  // First check if we have been assigned a color
+  if (!clientState.playerColor) {
+    console.log("Player color not assigned yet");
+    return false;
   }
   
-  // Fall back to comparing player color with current turn
-  const result = clientState.playerColor === gameState.currentTurn;
-  console.log(`Checking turn by comparing colors: ${result}, Player color: ${clientState.playerColor}, Current turn: ${gameState.currentTurn}`);
+  // Check if we're in a game
+  if (!gameState.currentTurn) {
+    console.log("Game not started yet");
+    return false;
+  }
   
-  // Update the client state flag
-  clientState.isMyTurn = result;
+  // Use the client-side turn state (set by the server)
+  const serverTurn = gameState.currentTurn;
+  const isMyTurnBasedOnServer = clientState.playerColor === serverTurn;
   
-  return result;
+  // For debugging, check if there's a mismatch between server and chess engine
+  if (gameState.chessEngine) {
+    const chessEngineTurn = gameState.chessEngine.turn();
+    const playerColorInEngine = clientState.playerColor === 'white' ? 'w' : 'b';
+    const expectedEngineTurn = serverTurn === 'white' ? 'w' : 'b';
+    
+    if (chessEngineTurn !== expectedEngineTurn) {
+      console.log(`Turn state mismatch! Client thinks it's ${serverTurn}'s turn but chess engine says it's ${chessEngineTurn === 'w' ? 'white' : 'black'}'s turn`);
+      
+      // Don't automatically fix here, let the gameStateUpdate handler fix it
+      // Just return whether it's the player's turn based on the server state
+    }
+  }
+  
+  // Use the server's turn state as the source of truth
+  return isMyTurnBasedOnServer;
 }
 
 // End the current player's turn
