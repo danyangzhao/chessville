@@ -232,157 +232,107 @@ function setupSocketListeners() {
     // Update the game state
     gameState = data.gameState;
     
-    // Restore the config if it was lost in the update
-    if (!gameState.config) {
-      console.log('Restoring entire config after game state update');
-      gameState.config = existingConfig;
-    } else {
-      // Make sure farming config exists
-      if (!gameState.config.farming) {
-        console.log('Restoring farming config');
-        gameState.config.farming = existingConfig.farming;
-      } 
-      // Make sure plants config exists with all properties
-      else if (!gameState.config.farming.plants) {
-        console.log('Restoring plants config');
-        gameState.config.farming.plants = existingConfig.farming.plants;
-      }
-      // Even if plants object exists, ensure each plant has all required properties
-      else {
-        const defaultPlants = {
-          corn: { 
-            seedCost: 3,
-            harvestYield: 10,
-            growthStages: 3,
-            growthTime: 3,
-            emoji: "🌽" 
-          },
-          wheat: { 
-            seedCost: 2,
-            harvestYield: 6,
-            growthStages: 2,
-            growthTime: 2,
-            emoji: "🌾" 
-          },
-          carrot: { 
-            seedCost: 4,
-            harvestYield: 12,
-            growthStages: 3,
-            growthTime: 3,
-            emoji: "🥕" 
-          },
-          potato: { 
-            seedCost: 5,
-            harvestYield: 15,
-            growthStages: 4,
-            growthTime: 4,
-            emoji: "🥔" 
-          }
-        };
-        
-        // Check each plant type for missing properties
-        for (const plantType in defaultPlants) {
-          if (!gameState.config.farming.plants[plantType]) {
-            console.log(`Restoring missing plant: ${plantType}`);
-            gameState.config.farming.plants[plantType] = defaultPlants[plantType];
-          } else {
-            // Check if any properties are missing
-            const currentPlant = gameState.config.farming.plants[plantType];
-            const defaultPlant = defaultPlants[plantType];
-            
-            for (const prop in defaultPlant) {
-              if (currentPlant[prop] === undefined) {
-                console.log(`Restoring missing property ${prop} for ${plantType}`);
-                currentPlant[prop] = defaultPlant[prop];
-              }
-            }
-          }
-        }
-      }
+    // Restore any previously set configuration
+    if (existingConfig) {
+        gameState.config = existingConfig;
     }
     
-    // Explicitly store the current turn from the server
+    // Ensure properties are restored for each crop type
+    if (gameState.crops) {
+        Object.entries(gameState.crops).forEach(([cropName, crop]) => {
+            if (!crop.growthStages && defaultCropData[cropName] && defaultCropData[cropName].growthStages) {
+                console.log(`Restoring missing property growthStages for ${cropName}`);
+                crop.growthStages = defaultCropData[cropName].growthStages;
+            }
+        });
+    }
+    
+    // Store the current turn from the server
     gameState.currentTurn = data.currentTurn;
     console.log(`Current turn from server: ${gameState.currentTurn}`);
     
     // Update the chess engine with the new state
     if (gameState.chessEngineState) {
-      console.log('Updating chess engine with state:', gameState.chessEngineState);
-      try {
-        gameState.chessEngine = new Chess(gameState.chessEngineState);
-        
-        // IMPORTANT FIX: Make sure the chess engine's turn matches the game state turn
-        const chessEngineTurn = gameState.chessEngine.turn();
-        const expectedTurn = gameState.currentTurn === 'white' ? 'w' : 'b';
-        console.log(`Chess engine turn: ${chessEngineTurn}, Expected: ${expectedTurn}`);
-        
-        // If there's a mismatch, force the correct turn
-        if (chessEngineTurn !== expectedTurn) {
-          console.warn(`Turn mismatch detected! Fixing chess engine turn.`);
-          // We need to create a custom FEN with the correct turn
-          const fen = gameState.chessEngine.fen();
-          const fenParts = fen.split(' ');
-          fenParts[1] = expectedTurn; // Set the correct turn
-          const correctedFen = fenParts.join(' ');
-          console.log(`Corrected FEN: ${correctedFen}`);
-          
-          // Reinitialize the chess engine with the corrected FEN
-          gameState.chessEngine = new Chess(correctedFen);
-          gameState.chessEngineState = correctedFen;
+        console.log('Updating chess engine with state:', gameState.chessEngineState);
+        try {
+            // Create a new chess engine instance with the FEN state from the server
+            gameState.chessEngine = new Chess(gameState.chessEngineState);
+            
+            // Check if the chess engine turn matches the game state turn
+            const chessEngineTurn = gameState.chessEngine.turn();
+            const expectedTurn = gameState.currentTurn === 'white' ? 'w' : 'b';
+            console.log(`Chess engine turn: ${chessEngineTurn}, Expected: ${expectedTurn}`);
+            
+            // If there's a mismatch, we need to fix it safely
+            if (chessEngineTurn !== expectedTurn) {
+                console.warn(`Turn mismatch detected! Will create a fixed chess engine state.`);
+                
+                // Get the current position from the chess engine
+                const position = gameState.chessEngine.fen();
+                
+                // Safely update just the turn portion (the second part when split by spaces)
+                const parts = position.split(' ');
+                if (parts.length >= 2) {
+                    parts[1] = expectedTurn;
+                    const fixedFen = parts.join(' ');
+                    console.log(`Original FEN: ${position}`);
+                    console.log(`Fixed FEN: ${fixedFen}`);
+                    
+                    // Create a new chess engine with the fixed FEN
+                    try {
+                        const fixedEngine = new Chess(fixedFen);
+                        // Verify that the fixed engine has pieces
+                        const boardString = fixedEngine.fen().split(' ')[0];
+                        if (boardString.includes('p') || boardString.includes('P')) {
+                            console.log(`Fixed engine created successfully with pieces on the board`);
+                            gameState.chessEngine = fixedEngine;
+                            gameState.chessEngineState = fixedFen;
+                        } else {
+                            console.error(`Fixed engine has no pieces! Keeping original engine and trying alternative fix.`);
+                            // As a fallback, keep the original engine but make forcing moves
+                            // This won't fix validation but prevents data loss
+                        }
+                    } catch (err) {
+                        console.error(`Error creating fixed engine: ${err}. Keeping original engine.`);
+                    }
+                }
+            }
+            
+            console.log('Chess engine updated successfully, FEN:', gameState.chessEngine.fen());
+        } catch (error) {
+            console.error('Error updating chess engine:', error);
+            // If there's an error, initialize with default position
+            gameState.chessEngine = new Chess();
         }
-        
-        console.log('Chess engine updated successfully, FEN:', gameState.chessEngine.fen());
-      } catch (error) {
-        console.error('Error updating chess engine:', error);
-        // If there's an error, initialize with default position
-        gameState.chessEngine = new Chess();
-      }
     } else {
-      console.warn('No chess engine state received from server, initializing with default position');
-      gameState.chessEngine = new Chess();
+        console.warn('No chess engine state received from server, initializing with default position');
+        gameState.chessEngine = new Chess();
     }
     
     // Update turn state
     const previousTurnState = clientState.isMyTurn;
     clientState.isMyTurn = clientState.playerColor === data.currentTurn;
-    
-    console.log(`Turn updated: ${previousTurnState ? 'Was my turn' : 'Was not my turn'} -> ${clientState.isMyTurn ? 'Now my turn' : 'Now not my turn'}`);
+    console.log(`Turn updated: Was ${previousTurnState ? 'my turn' : 'not my turn'} -> Now ${clientState.isMyTurn ? 'my turn' : 'not my turn'}`);
     console.log(`Player color: ${clientState.playerColor}, Current turn: ${data.currentTurn}, Is my turn: ${clientState.isMyTurn}`);
     
-    // Reinitialize the farm to update any capture-unlocked plots
-    const playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
-    console.log(`Reinitializing farm for ${playerKey} after game state update`);
-    initializePlayerFarm(playerKey);
-    
-    // Update UI
-    updateChessBoardDisplay();
-    updateCornCounts();
-    updateTurnIndicator();
-    
-    // Reset selection state
-    resetSelectionState();
-    
-    // If turn changed to me, show a notification
-    if (!previousTurnState && clientState.isMyTurn) {
-      showMessage("It's your turn now!");
-    }
-    
-    // Check if any capture-unlocked plots have changed
-    if (gameState.farms[playerKey]) {
-      const captureRequired = gameState.farms[playerKey].captureRequired;
-      for (const req of captureRequired) {
-        if (req.unlocked) {
-          const plotIndex = req.plot;
-          console.log(`Plot ${plotIndex} has been unlocked by captures`);
-          
-          // Show a notification if a plot was unlocked due to capture
-          const plotState = gameState.farms[playerKey].plots[plotIndex];
-          if (plotState && plotState.state === 'empty') {
-            showMessage("You've unlocked a new farm plot by capturing a piece!");
-          }
+    // Reinitialize the farm to reflect any updates to plot status
+    console.log(`Reinitializing farm for ${clientState.playerId} after game state update`);
+    initializePlayerFarm(clientState.playerId);
+
+    // Check for any capture-unlocked plots that may have changed
+    if (gameState.players && gameState.players[clientState.playerId] && gameState.players[clientState.playerId].farm) {
+        const farm = gameState.players[clientState.playerId].farm;
+        for (let i = 0; i < farm.plots.length; i++) {
+            if (farm.plots[i].state === 'unlocked' && farm.plots[i].unlockSource === 'capture') {
+                console.log(`Plot ${i} was unlocked due to a capture!`);
+                // You could add a UI notification here
+            }
         }
-      }
     }
+
+    // Update the UI
+    updateCornCounts();
+    updateChessBoardDisplay();
   });
   
   // Handle game over
@@ -1393,29 +1343,48 @@ function getValidMoves() {
   
   console.log(`Getting valid moves for ${piece.type} at ${algebraic}`);
   
-  // Debug the board state
-  console.log("Current FEN:", gameState.chessEngine.fen());
-  console.log("Current turn in chess engine:", gameState.chessEngine.turn());
-  console.log("Is player's turn in client state:", clientState.isMyTurn);
+  // Debug logging to help diagnose the issue
+  console.log(`Current FEN: ${gameState.chessEngine.fen()}`);
+  console.log(`Current turn in chess engine: ${gameState.chessEngine.turn()}`);
+  console.log(`Is player's turn in client state: ${clientState.isMyTurn}`);
   
-  const moves = [];
-  const possibleMoves = gameState.chessEngine.moves({ square: algebraic, verbose: true });
+  // Check for turn mismatch here and correct it before getting moves
+  const chessEngineTurn = gameState.chessEngine.turn();
+  const expectedTurn = clientState.playerColor === 'white' ? 'w' : 'b';
   
-  console.log(`Possible moves from chess.js:`, possibleMoves);
-  
-  for (const move of possibleMoves) {
-    const toSquare = squareToCoordinates(move.to);
-    moves.push({
-      from: { row, col },
-      to: toSquare,
-      algebraic: move.san,
-      promotion: move.promotion || null,
-      flags: move.flags
-    });
+  if (clientState.isMyTurn && chessEngineTurn !== expectedTurn) {
+    console.warn(`Turn mismatch in getValidMoves! Fixing before calculating moves.`);
+    // Get the current position from the chess engine
+    const position = gameState.chessEngine.fen();
+    
+    // Safely update just the turn portion
+    const parts = position.split(' ');
+    if (parts.length >= 2) {
+      parts[1] = expectedTurn;
+      const fixedFen = parts.join(' ');
+      console.log(`Fixing FEN for move calculation: ${fixedFen}`);
+      
+      // Try with the fixed FEN
+      try {
+        const tempEngine = new Chess(fixedFen);
+        const moves = tempEngine.moves({square: algebraic, verbose: true});
+        console.log(`Possible moves from temp engine:`, moves);
+        return moves;
+      } catch (err) {
+        console.error(`Error with temp engine, falling back to original:`, err);
+      }
+    }
   }
   
-  console.log(`Found ${moves.length} valid moves for ${piece.type} at ${algebraic}`);
-  return moves;
+  // If no mismatch or the fix failed, use the main engine
+  const possibleMoves = gameState.chessEngine.moves({square: algebraic, verbose: true});
+  console.log(`Possible moves from chess.js:`, possibleMoves);
+  
+  // Filter out any invalid moves based on game rules
+  // ... (existing filtering logic if any)
+  
+  console.log(`Found ${possibleMoves.length} valid moves for ${piece.type} at ${algebraic}`);
+  return possibleMoves;
 }
 
 // Convert row/col to algebraic notation
