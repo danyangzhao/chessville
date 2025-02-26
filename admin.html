@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chessville Admin Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1, h2, h3 {
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .config-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        
+        .config-item {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: inline-block;
+            width: 180px;
+            font-weight: bold;
+        }
+        
+        input[type="number"] {
+            width: 80px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .plants-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .plant-config {
+            flex: 1;
+            min-width: 250px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .status-message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Chessville Game Configuration</h1>
+        <p>Use this panel to adjust game balance parameters during playtesting.</p>
+        
+        <div id="status-message" class="status-message"></div>
+        
+        <form id="config-form">
+            <div class="config-section">
+                <h2>General Settings</h2>
+                <div class="config-item">
+                    <label for="startingCorn">Starting Corn:</label>
+                    <input type="number" id="startingCorn" name="startingCorn" min="0">
+                </div>
+                <div class="config-item">
+                    <label for="cornVictoryAmount">Corn to Win:</label>
+                    <input type="number" id="cornVictoryAmount" name="cornVictoryAmount" min="50">
+                </div>
+                <div class="config-item">
+                    <label for="startingUnlockedPlots">Starting Unlocked Plots:</label>
+                    <input type="number" id="startingUnlockedPlots" name="startingUnlockedPlots" min="1" max="15">
+                </div>
+                <div class="config-item">
+                    <label for="startingUnlockablePlots">Starting Unlockable Plots:</label>
+                    <input type="number" id="startingUnlockablePlots" name="startingUnlockablePlots" min="0" max="15">
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h2>Farming Settings</h2>
+                <div class="config-item">
+                    <label for="unlockCost">Plot Unlock Cost:</label>
+                    <input type="number" id="unlockCost" name="farming.unlockCost" min="1">
+                </div>
+                <div class="config-item">
+                    <label for="captureScaling">Capture Scaling Factor:</label>
+                    <input type="number" id="captureScaling" name="farming.captureScaling" min="1">
+                </div>
+                
+                <h3>Plant Types</h3>
+                <div class="plants-container">
+                    <div class="plant-config">
+                        <h4>🌽 Corn</h4>
+                        <div class="config-item">
+                            <label for="cornSeedCost">Seed Cost:</label>
+                            <input type="number" id="cornSeedCost" name="farming.plants.corn.seedCost" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="cornHarvestYield">Harvest Yield:</label>
+                            <input type="number" id="cornHarvestYield" name="farming.plants.corn.harvestYield" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="cornGrowthTime">Growth Time (turns):</label>
+                            <input type="number" id="cornGrowthTime" name="farming.plants.corn.growthTime" min="1">
+                        </div>
+                    </div>
+                    
+                    <div class="plant-config">
+                        <h4>🌾 Wheat</h4>
+                        <div class="config-item">
+                            <label for="wheatSeedCost">Seed Cost:</label>
+                            <input type="number" id="wheatSeedCost" name="farming.plants.wheat.seedCost" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="wheatHarvestYield">Harvest Yield:</label>
+                            <input type="number" id="wheatHarvestYield" name="farming.plants.wheat.harvestYield" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="wheatGrowthTime">Growth Time (turns):</label>
+                            <input type="number" id="wheatGrowthTime" name="farming.plants.wheat.growthTime" min="1">
+                        </div>
+                    </div>
+                    
+                    <div class="plant-config">
+                        <h4>🥕 Carrot</h4>
+                        <div class="config-item">
+                            <label for="carrotSeedCost">Seed Cost:</label>
+                            <input type="number" id="carrotSeedCost" name="farming.plants.carrot.seedCost" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="carrotHarvestYield">Harvest Yield:</label>
+                            <input type="number" id="carrotHarvestYield" name="farming.plants.carrot.harvestYield" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="carrotGrowthTime">Growth Time (turns):</label>
+                            <input type="number" id="carrotGrowthTime" name="farming.plants.carrot.growthTime" min="1">
+                        </div>
+                    </div>
+                    
+                    <div class="plant-config">
+                        <h4>🥔 Potato</h4>
+                        <div class="config-item">
+                            <label for="potatoSeedCost">Seed Cost:</label>
+                            <input type="number" id="potatoSeedCost" name="farming.plants.potato.seedCost" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="potatoHarvestYield">Harvest Yield:</label>
+                            <input type="number" id="potatoHarvestYield" name="farming.plants.potato.harvestYield" min="1">
+                        </div>
+                        <div class="config-item">
+                            <label for="potatoGrowthTime">Growth Time (turns):</label>
+                            <input type="number" id="potatoGrowthTime" name="farming.plants.potato.growthTime" min="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h2>Chess Piece Move Costs</h2>
+                <div class="config-item">
+                    <label for="pawnCost">Pawn (p):</label>
+                    <input type="number" id="pawnCost" name="moveCosts.p" min="0">
+                </div>
+                <div class="config-item">
+                    <label for="knightCost">Knight (n):</label>
+                    <input type="number" id="knightCost" name="moveCosts.n" min="0">
+                </div>
+                <div class="config-item">
+                    <label for="bishopCost">Bishop (b):</label>
+                    <input type="number" id="bishopCost" name="moveCosts.b" min="0">
+                </div>
+                <div class="config-item">
+                    <label for="rookCost">Rook (r):</label>
+                    <input type="number" id="rookCost" name="moveCosts.r" min="0">
+                </div>
+                <div class="config-item">
+                    <label for="queenCost">Queen (q):</label>
+                    <input type="number" id="queenCost" name="moveCosts.q" min="0">
+                </div>
+                <div class="config-item">
+                    <label for="kingCost">King (k):</label>
+                    <input type="number" id="kingCost" name="moveCosts.k" min="0">
+                </div>
+            </div>
+            
+            <button type="submit">Save Configuration</button>
+            <button type="button" id="reset-button">Reset to Defaults</button>
+        </form>
+    </div>
+
+    <script>
+        // Fetch and display current configuration
+        async function loadCurrentConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const config = data.config;
+                    
+                    // Populate form fields with current values
+                    document.getElementById('startingCorn').value = config.startingCorn;
+                    document.getElementById('cornVictoryAmount').value = config.cornVictoryAmount;
+                    document.getElementById('startingUnlockedPlots').value = config.startingUnlockedPlots;
+                    document.getElementById('startingUnlockablePlots').value = config.startingUnlockablePlots;
+                    
+                    // Farming settings
+                    document.getElementById('unlockCost').value = config.farming.unlockCost;
+                    document.getElementById('captureScaling').value = config.farming.captureScaling;
+                    
+                    // Plants
+                    document.getElementById('cornSeedCost').value = config.farming.plants.corn.seedCost;
+                    document.getElementById('cornHarvestYield').value = config.farming.plants.corn.harvestYield;
+                    document.getElementById('cornGrowthTime').value = config.farming.plants.corn.growthTime;
+                    
+                    document.getElementById('wheatSeedCost').value = config.farming.plants.wheat.seedCost;
+                    document.getElementById('wheatHarvestYield').value = config.farming.plants.wheat.harvestYield;
+                    document.getElementById('wheatGrowthTime').value = config.farming.plants.wheat.growthTime;
+                    
+                    document.getElementById('carrotSeedCost').value = config.farming.plants.carrot.seedCost;
+                    document.getElementById('carrotHarvestYield').value = config.farming.plants.carrot.harvestYield;
+                    document.getElementById('carrotGrowthTime').value = config.farming.plants.carrot.growthTime;
+                    
+                    document.getElementById('potatoSeedCost').value = config.farming.plants.potato.seedCost;
+                    document.getElementById('potatoHarvestYield').value = config.farming.plants.potato.harvestYield;
+                    document.getElementById('potatoGrowthTime').value = config.farming.plants.potato.growthTime;
+                    
+                    // Move costs
+                    document.getElementById('pawnCost').value = config.moveCosts.p;
+                    document.getElementById('knightCost').value = config.moveCosts.n;
+                    document.getElementById('bishopCost').value = config.moveCosts.b;
+                    document.getElementById('rookCost').value = config.moveCosts.r;
+                    document.getElementById('queenCost').value = config.moveCosts.q;
+                    document.getElementById('kingCost').value = config.moveCosts.k;
+                } else {
+                    showMessage(data.message || 'Failed to load configuration', 'error');
+                }
+            } catch (error) {
+                showMessage('Error loading configuration: ' + error.message, 'error');
+            }
+        }
+        
+        // Submit form data to update configuration
+        document.getElementById('config-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Collect all form values into a structured object
+            const formData = new FormData(this);
+            const updates = {};
+            
+            // Process each form field and build the nested update object
+            for (const [key, value] of formData.entries()) {
+                if (value === '') continue; // Skip empty fields
+                
+                // Handle nested properties (e.g., "farming.plants.corn.seedCost")
+                const parts = key.split('.');
+                let current = updates;
+                
+                for (let i = 0; i < parts.length - 1; i++) {
+                    if (!current[parts[i]]) {
+                        current[parts[i]] = {};
+                    }
+                    current = current[parts[i]];
+                }
+                
+                // Set the actual value (convert to number if it's numeric)
+                current[parts[parts.length - 1]] = isNaN(value) ? value : Number(value);
+            }
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updates)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('Configuration updated successfully!', 'success');
+                } else {
+                    showMessage(data.message || 'Failed to update configuration', 'error');
+                }
+            } catch (error) {
+                showMessage('Error updating configuration: ' + error.message, 'error');
+            }
+        });
+        
+        // Reset to defaults
+        document.getElementById('reset-button').addEventListener('click', async function() {
+            if (confirm('Are you sure you want to reset all values to defaults?')) {
+                try {
+                    const response = await fetch('/api/config/reset', {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showMessage('Configuration reset to defaults', 'success');
+                        // Reload the form with default values
+                        loadCurrentConfig();
+                    } else {
+                        showMessage(data.message || 'Failed to reset configuration', 'error');
+                    }
+                } catch (error) {
+                    showMessage('Error resetting configuration: ' + error.message, 'error');
+                }
+            }
+        });
+        
+        // Display status messages
+        function showMessage(message, type) {
+            const statusElement = document.getElementById('status-message');
+            statusElement.textContent = message;
+            statusElement.className = 'status-message ' + type;
+            statusElement.style.display = 'block';
+            
+            // Hide message after 5 seconds
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Load configuration when page loads
+        window.addEventListener('load', loadCurrentConfig);
+    </script>
+</body>
+</html> 
