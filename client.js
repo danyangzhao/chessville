@@ -154,6 +154,7 @@ function setupSocketListeners() {
     // Store player data
     clientState.playerColor = data.color;
     clientState.roomId = data.roomId;
+    clientState.playerId = data.playerId || clientState.socket.id; // Set playerId to socket.id if not provided
     
     console.log(`Assigned as player ${clientState.playerId} with color ${clientState.playerColor} in room ${clientState.roomId}`);
     
@@ -185,7 +186,16 @@ function setupSocketListeners() {
     try {
       if (gameState.chessEngineState) {
         console.log('Using provided chess engine state:', gameState.chessEngineState);
-        gameState.chessEngine = new Chess(gameState.chessEngineState);
+        
+        // Validate the FEN - make sure it's not an empty board
+        const boardPart = gameState.chessEngineState.split(' ')[0];
+        if (boardPart === "8/8/8/8/8/8/8/8") {
+          console.warn("Received invalid empty board FEN from server, using default position instead");
+          gameState.chessEngine = new Chess();
+          gameState.chessEngineState = gameState.chessEngine.fen();
+        } else {
+          gameState.chessEngine = new Chess(gameState.chessEngineState);
+        }
       } else {
         console.log('Initializing new chess engine with default position');
         gameState.chessEngine = new Chess();
@@ -194,11 +204,15 @@ function setupSocketListeners() {
       }
       
       console.log('Chess engine initialized successfully with FEN:', gameState.chessEngine.fen());
+      
+      // Store this initial state for potential recovery
+      gameState.previousChessEngineState = gameState.chessEngine.fen();
     } catch (error) {
       console.error('Error initializing chess engine:', error);
       console.log('Attempting to initialize with default position');
       gameState.chessEngine = new Chess();
       gameState.chessEngineState = gameState.chessEngine.fen();
+      gameState.previousChessEngineState = gameState.chessEngine.fen();
     }
     
     // Set initial turn state
@@ -228,9 +242,12 @@ function setupSocketListeners() {
     
     // Save a reference to the existing config
     const existingConfig = gameState.config;
+    // Save the current chess state before updating
+    const previousChessState = gameState.chessEngine ? gameState.chessEngine.fen() : null;
     
     // Update the game state
     gameState = data.gameState;
+    gameState.previousChessEngineState = previousChessState; // Store for recovery if needed
     
     // Restore any previously set configuration
     if (existingConfig) {
@@ -254,6 +271,14 @@ function setupSocketListeners() {
     // Update the chess engine with the new state
     if (gameState.chessEngineState) {
         console.log('Updating chess engine with state:', gameState.chessEngineState);
+        
+        // Validate the FEN - make sure it's not an empty board
+        const boardPart = gameState.chessEngineState.split(' ')[0];
+        if (boardPart === "8/8/8/8/8/8/8/8" && previousChessState) {
+            console.warn("Received empty board FEN from server, using previous state instead");
+            gameState.chessEngineState = previousChessState;
+        }
+        
         try {
             // Create a new chess engine instance with the FEN state from the server
             gameState.chessEngine = new Chess(gameState.chessEngineState);
@@ -289,8 +314,22 @@ function setupSocketListeners() {
                             gameState.chessEngineState = fixedFen;
                         } else {
                             console.error(`Fixed engine has no pieces! Keeping original engine and trying alternative fix.`);
-                            // As a fallback, keep the original engine but make forcing moves
-                            // This won't fix validation but prevents data loss
+                            // If we have a previous state with pieces, try to use that instead
+                            if (previousChessState) {
+                                try {
+                                    const recoveryEngine = new Chess(previousChessState);
+                                    const recoveryParts = previousChessState.split(' ');
+                                    recoveryParts[1] = expectedTurn; // Fix the turn
+                                    const recoveryFen = recoveryParts.join(' ');
+                                    const finalEngine = new Chess(recoveryFen);
+                                    
+                                    console.log(`Recovered chess engine from previous state with turn fixed`);
+                                    gameState.chessEngine = finalEngine;
+                                    gameState.chessEngineState = recoveryFen;
+                                } catch (e) {
+                                    console.error(`Recovery failed: ${e}`);
+                                }
+                            }
                         }
                     } catch (err) {
                         console.error(`Error creating fixed engine: ${err}. Keeping original engine.`);
@@ -301,8 +340,19 @@ function setupSocketListeners() {
             console.log('Chess engine updated successfully, FEN:', gameState.chessEngine.fen());
         } catch (error) {
             console.error('Error updating chess engine:', error);
-            // If there's an error, initialize with default position
-            gameState.chessEngine = new Chess();
+            // If there's an error, try the previous state or initialize with default position
+            if (previousChessState) {
+                try {
+                    console.log(`Trying to recover with previous state: ${previousChessState}`);
+                    gameState.chessEngine = new Chess(previousChessState);
+                    gameState.chessEngineState = previousChessState;
+                } catch (e) {
+                    console.error(`Recovery failed: ${e}`);
+                    gameState.chessEngine = new Chess();
+                }
+            } else {
+                gameState.chessEngine = new Chess();
+            }
         }
     } else {
         console.warn('No chess engine state received from server, initializing with default position');
@@ -315,9 +365,10 @@ function setupSocketListeners() {
     console.log(`Turn updated: Was ${previousTurnState ? 'my turn' : 'not my turn'} -> Now ${clientState.isMyTurn ? 'my turn' : 'not my turn'}`);
     console.log(`Player color: ${clientState.playerColor}, Current turn: ${data.currentTurn}, Is my turn: ${clientState.isMyTurn}`);
     
-    // Reinitialize the farm to reflect any updates to plot status
-    console.log(`Reinitializing farm for ${clientState.playerId} after game state update`);
-    initializePlayerFarm(clientState.playerId);
+    // Get the proper player key for farm initialization
+    const playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
+    console.log(`Reinitializing farm for ${playerKey} after game state update`);
+    initializePlayerFarm(playerKey);
 
     // Check for any capture-unlocked plots that may have changed
     if (gameState.players && gameState.players[clientState.playerId] && gameState.players[clientState.playerId].farm) {
@@ -453,6 +504,12 @@ function initializePlayerFarm(playerKey) {
   if (!farmContainer) {
     console.error('Farm container not found');
     return;
+  }
+  
+  // If playerKey is null or undefined, use the client's actual player key
+  if (!playerKey) {
+    console.warn('PlayerKey is null, using color-based player key');
+    playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
   }
   
   // Clear existing farm
@@ -1140,6 +1197,23 @@ function handleChessSquareClick(event) {
           const newCorn = currentCorn - moveCost;
           gameState.farms[myKey].corn = newCorn;
           
+          // Validate chess engine state before sending
+          const currentFen = gameState.chessEngine.fen();
+          const boardPart = currentFen.split(' ')[0];
+          if (boardPart === "8/8/8/8/8/8/8/8") {
+            console.error("CRITICAL ERROR: Chess board is empty after move! Not sending this state to server");
+            // Undo the move
+            gameState.chessEngine.undo();
+            showMessage("Error making move. Please try again.");
+            // Reset selection
+            clientState.selectedPiece = null;
+            updateChessBoardDisplay();
+            return;
+          }
+          
+          // Store current state for potential recovery
+          gameState.previousChessEngineState = currentFen;
+          
           // Send move to server
           clientState.socket.emit('gameAction', {
             type: 'movePiece',
@@ -1515,7 +1589,34 @@ function endTurn() {
   }
   
   console.log(`Ending turn for player ${clientState.playerId} (${clientState.playerColor})`);
-  console.log(`Current chess engine state: ${gameState.chessEngine.fen()}`);
+  
+  // Validate chess engine state before sending - prevent empty board
+  const currentFen = gameState.chessEngine.fen();
+  console.log(`Current chess engine state: ${currentFen}`);
+  
+  // Check if the board is empty (first part of FEN would be "8/8/8/8/8/8/8/8")
+  const boardPart = currentFen.split(' ')[0];
+  if (boardPart === "8/8/8/8/8/8/8/8") {
+    console.error("CRITICAL ERROR: Chess board is empty! Not sending this state to server");
+    
+    // Try to restore from the previous state or reset to initial position
+    if (gameState.previousChessEngineState) {
+      console.log(`Restoring from previous state: ${gameState.previousChessEngineState}`);
+      try {
+        gameState.chessEngine = new Chess(gameState.previousChessEngineState);
+        console.log(`Restored chess engine with FEN: ${gameState.chessEngine.fen()}`);
+      } catch (e) {
+        console.error("Failed to restore previous state, using default position");
+        gameState.chessEngine = new Chess();
+      }
+    } else {
+      console.log("No previous state available, using default position");
+      gameState.chessEngine = new Chess();
+    }
+  } else {
+    // Save current state as previous state for potential recovery
+    gameState.previousChessEngineState = currentFen;
+  }
   
   // Send end turn action to server
   clientState.socket.emit('gameAction', {
