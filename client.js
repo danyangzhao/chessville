@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
   initializeScreens();
   
   // Initialize Socket.io connection
-  clientState.socket = io();
+  clientState.socket = io(window.location.origin);
   
   // Set up event listeners
   setupSocketListeners();
