@@ -617,27 +617,33 @@ function displayValidMoves() {
     el.classList.remove('valid-move', 'valid-capture');
   });
   
-  const validMoves = getValidMoves();
-  console.log("Valid moves:", validMoves);
+  // Get the algebraic position of the selected piece
+  const fromAlgebraic = algebraicPosition(clientState.selectedPiece.row, clientState.selectedPiece.col);
+  
+  // Get valid moves directly from the chess engine
+  const validMoves = gameState.chessEngine.moves({
+    square: fromAlgebraic,
+    verbose: true
+  });
+  
+  console.log("Valid moves:", validMoves.map(move => `${move.from}->${move.to}`));
   
   // Highlight valid moves
-  for (const move of validMoves) {
-    const targetSquare = document.getElementById(`square-${move.to.row}-${move.to.col}`);
+  validMoves.forEach(move => {
+    // Convert algebraic destination to row/col
+    const coords = squareToCoordinates(move.to);
+    const targetSquare = document.getElementById(`square-${coords.row}-${coords.col}`);
     
     if (targetSquare) {
-      // Check if there's a piece on the target square by checking the chess engine
-      const board = gameState.chessEngine.board();
-      const targetPiece = board[move.to.row][move.to.col];
-      
-      if (targetPiece) {
+      if (move.captured) {
         targetSquare.classList.add('valid-capture');
-        console.log(`Highlighting valid capture at ${move.to.row},${move.to.col}`);
+        console.log(`Highlighting valid capture at ${coords.row},${coords.col} (${move.to})`);
       } else {
         targetSquare.classList.add('valid-move');
-        console.log(`Highlighting valid move at ${move.to.row},${move.to.col}`);
+        console.log(`Highlighting valid move at ${coords.row},${coords.col} (${move.to})`);
       }
     }
-  }
+  });
 }
 
 // Update plot display
@@ -1083,25 +1089,28 @@ function handleChessSquareClick(event) {
     }
     
     // Try to move the selected piece to this square
-    const fromSquare = {
-      row: clientState.selectedPiece.row,
-      col: clientState.selectedPiece.col
-    };
+    const fromRow = clientState.selectedPiece.row;
+    const fromCol = clientState.selectedPiece.col;
     
-    const toSquare = { row, col };
+    // Get algebraic notations for the from and to squares
+    const fromAlgebraic = algebraicPosition(fromRow, fromCol);
+    const toAlgebraic = algebraicPosition(row, col);
     
-    // Check if this is a valid move
-    const validMoves = getValidMoves();
-    let isValidMove = false;
+    console.log(`Attempting to move from ${fromAlgebraic} to ${toAlgebraic}`);
     
-    for (const move of validMoves) {
-      if (move.to.row === row && move.to.col === col) {
-        isValidMove = true;
-        break;
-      }
-    }
+    // Get valid moves from the chess engine
+    const validMoves = gameState.chessEngine.moves({
+      square: fromAlgebraic,
+      verbose: true
+    });
     
-    console.log(`Attempting move from ${fromSquare.row},${fromSquare.col} to ${toSquare.row},${toSquare.col} - valid: ${isValidMove}`);
+    // Log the valid moves for debugging
+    console.log("Valid moves from chess engine:", validMoves.map(m => `${m.from}->${m.to}`));
+    
+    // Check if the destination square is a valid move
+    const isValidMove = validMoves.some(move => move.to === toAlgebraic);
+    
+    console.log(`Attempting move from ${fromRow},${fromCol} to ${row},${col} - valid: ${isValidMove}`);
     
     if (isValidMove) {
       // Check if player has enough corn for this move
@@ -1113,19 +1122,16 @@ function handleChessSquareClick(event) {
       
       if (currentCorn >= moveCost) {
         // Make the move
-        const fromPos = algebraicPosition(fromSquare.row, fromSquare.col);
-        const toPos = algebraicPosition(toSquare.row, toSquare.col);
-        
-        console.log(`Making move from ${fromPos} to ${toPos}`);
+        console.log(`Making move from ${fromAlgebraic} to ${toAlgebraic}`);
         
         const moveResult = gameState.chessEngine.move({
-          from: fromPos,
-          to: toPos,
+          from: fromAlgebraic,
+          to: toAlgebraic,
           promotion: 'q' // Always promote to queen
         });
         
         if (moveResult) {
-          console.log(`Move made: ${fromPos} to ${toPos}`, moveResult);
+          console.log(`Move made: ${fromAlgebraic} to ${toAlgebraic}`, moveResult);
           
           // Check if it was a capture
           const isCapture = moveResult.captured ? true : false;
@@ -1161,7 +1167,7 @@ function handleChessSquareClick(event) {
             endTurn();
           }, 800);
         } else {
-          console.error(`Move failed from ${fromPos} to ${toPos}`);
+          console.error(`Move failed from ${fromAlgebraic} to ${toAlgebraic}`);
           showMessage("Invalid move!");
         }
       } else {
@@ -1409,13 +1415,9 @@ function squareToCoordinates(square) {
   const col = files.indexOf(square[0]);
   const row = ranks.indexOf(square[1]);
   
-  // If playing as black and the board is visually flipped, adjust coordinates
-  if (clientState.playerColor === 'black') {
-    // Return the correct coordinates for black player perspective
-    return { row, col };
-  } else {
-    return { row, col };
-  }
+  console.log(`Converting algebraic ${square} to row/col: ${row},${col}`);
+  
+  return { row, col };
 }
 
 // Reset selection state
