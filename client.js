@@ -151,9 +151,8 @@ function setupSocketListeners() {
     // Set the client's playerId to the socket ID by default
     clientState.playerId = clientState.socket.id;
     
-    // Join a room with ID 123 (hardcoded for simplicity)
-    const roomId = '123';
-    clientState.socket.emit('joinRoom', { roomId });
+    // No automatic room joining here anymore - will wait for user input
+    showScreen('login-screen');
   });
   
   // Handle connection error
@@ -188,6 +187,9 @@ function setupSocketListeners() {
     // Log important client state for debugging
     console.log(`Player assigned to room ${data.roomId} with color ${clientState.playerColor} and ID ${clientState.playerId}`);
     
+    // Show waiting screen after assignment
+    showScreen('waiting-screen');
+    
     // Update UI to show player info
     updateRoomInfo();
     
@@ -198,6 +200,12 @@ function setupSocketListeners() {
     const playerKey = clientState.playerColor === 'white' ? 'player1' : 'player2';
     console.log(`Initializing farm for ${playerKey} based on color ${clientState.playerColor}`);
     initializePlayerFarm(playerKey);
+  });
+  
+  // Handle connection error
+  clientState.socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+    showMessage('Error connecting to server. Please try again.');
   });
   
   // Handle room full event
@@ -211,6 +219,9 @@ function setupSocketListeners() {
   clientState.socket.on('gameStart', (data) => {
     console.log('Game start event received:', data);
     console.log('Raw game state from server:', JSON.stringify(data.gameState));
+    
+    // Show a message to the user
+    showMessage('Game starting!', 3000);
     
     // Initialize game state
     gameState = data.gameState;
@@ -256,10 +267,10 @@ function setupSocketListeners() {
     clientState.isMyTurn = clientState.playerColor === gameState.currentTurn;
     console.log(`Initial turn state: ${clientState.isMyTurn ? 'My turn' : 'Opponent\'s turn'}`);
     
-    // Show game screen first
+    // Show game screen first 
     showScreen('game-screen');
     
-    // Initialize the farms
+    // Initialize the farms 
     initializeFarms();
     
     // Add a slightly longer delay for board initialization to ensure the DOM is fully ready
@@ -525,6 +536,9 @@ function setupUIEventListeners() {
       e.preventDefault();
       
       const roomId = document.getElementById('room-id').value.trim();
+      
+      // Show a message to the user
+      showMessage('Connecting to game...', 10000); // Show for 10 seconds or until next message
       
       if (roomId) {
         // Join the specified room
