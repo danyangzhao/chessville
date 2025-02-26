@@ -1372,6 +1372,11 @@ function getValidMoves() {
   
   console.log(`Getting valid moves for ${piece.type} at ${algebraic}`);
   
+  // Debug the board state
+  console.log("Current FEN:", gameState.chessEngine.fen());
+  console.log("Current turn in chess engine:", gameState.chessEngine.turn());
+  console.log("Is player's turn in client state:", clientState.isMyTurn);
+  
   const moves = [];
   const possibleMoves = gameState.chessEngine.moves({ square: algebraic, verbose: true });
   
@@ -1397,7 +1402,13 @@ function algebraicPosition(row, col) {
   const files = 'abcdefgh';
   const ranks = '87654321';
   
-  return files[col] + ranks[row];
+  // If playing as black and the board is visually flipped, adjust coordinates
+  if (clientState.playerColor === 'black') {
+    // Fixing the mapping for black player perspective
+    return files[col] + ranks[row];
+  } else {
+    return files[col] + ranks[row];
+  }
 }
 
 // Convert algebraic notation to row/col
@@ -1408,7 +1419,13 @@ function squareToCoordinates(square) {
   const col = files.indexOf(square[0]);
   const row = ranks.indexOf(square[1]);
   
-  return { row, col };
+  // If playing as black and the board is visually flipped, adjust coordinates
+  if (clientState.playerColor === 'black') {
+    // Return the correct coordinates for black player perspective
+    return { row, col };
+  } else {
+    return { row, col };
+  }
 }
 
 // Reset selection state
