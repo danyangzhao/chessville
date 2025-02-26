@@ -46,3 +46,8 @@ function showMessage(message, duration = 3000) {
     messageEl.classList.remove('visible');
   }, duration);
 } 
+
+// Chessboard.js configuration
+var config = {
+  pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+}; 
