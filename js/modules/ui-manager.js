@@ -7,6 +7,22 @@ const UIManager = (() => {
   function setupUIEventListeners() {
     console.log('Setting up UI event listeners');
     
+    // Login form submission
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+      loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const roomIdInput = document.getElementById('room-id');
+        const roomId = roomIdInput ? roomIdInput.value.trim() : '';
+        
+        console.log(`Attempting to join room: ${roomId}`);
+        showMessage(`Connecting to game ${roomId}...`, 3000);
+        SocketManager.joinRoom(roomId);
+      });
+    } else {
+      console.error('Login form not found');
+    }
+    
     // Join game button
     const joinGameButton = document.getElementById('join-game-button');
     if (joinGameButton) {
