@@ -307,6 +307,9 @@ const ChessManager = (function() {
     setupBoard,
     updateBoard,
     processChessMove,
-    showMoveCosts
+    showMoveCosts,
+    getCurrentFEN: function() {
+      return chessEngine ? chessEngine.fen() : null;
+    }
   };
 })(); 

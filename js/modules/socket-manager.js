@@ -263,6 +263,24 @@ const SocketManager = (function() {
       console.error('Socket error:', error);
       showMessage('Error: ' + error.message);
     });
+    
+    // Add handler for direct turn notification
+    socket.on('your-turn', (data) => {
+      console.log('Received direct turn notification:', data);
+      
+      // Set current phase
+      if (data.phase) {
+        GameState.setCurrentGamePhase(data.phase);
+        GameState.resetFarmActionTaken(); // Reset farm action flag for new turn
+        UIManager.updateGamePhaseIndicator(data.phase);
+      }
+      
+      // Show prominent notification to player
+      showMessage('YOUR TURN - Farming Phase!', 5000);
+      
+      // Play a sound or other notification if implemented
+      // playTurnSound();
+    });
   }
   
   /**
@@ -399,8 +417,12 @@ const SocketManager = (function() {
     
     console.log('Sending end turn');
     
+    // Get the current chess state
+    const chessEngineState = ChessManager ? ChessManager.getCurrentFEN() : null;
+    
     socket.emit('end-turn', {
-      roomId: roomId
+      roomId: roomId,
+      chessEngineState: chessEngineState
     });
   }
   

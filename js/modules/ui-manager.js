@@ -188,7 +188,12 @@ const UIManager = (function() {
    * Update the turn indicator based on the current game state
    */
   function updateTurnIndicator() {
+    console.log(`Updating turn indicator. Current turn: ${GameState.getCurrentTurn()}, Player color: ${GameState.getPlayerColor()}`);
+    
+    // Update game status text
     updateGameStatus();
+    
+    // Update game phase indicator
     updateGamePhaseIndicator();
     
     // Highlight the active player's farm
@@ -196,13 +201,34 @@ const UIManager = (function() {
     const player2Header = document.getElementById('player2-header');
     
     if (player1Header && player2Header) {
+      // Remove active class from both headers
       player1Header.classList.remove('active-turn');
       player2Header.classList.remove('active-turn');
       
+      // Add active class to the current player's header
       if (GameState.getCurrentTurn() === 'white') {
         player1Header.classList.add('active-turn');
       } else {
         player2Header.classList.add('active-turn');
+      }
+    }
+    
+    // Update action buttons visibility based on whose turn it is
+    const skipFarmingButton = document.getElementById('skip-farming-button');
+    const endTurnButton = document.getElementById('end-turn-button');
+    
+    if (skipFarmingButton && endTurnButton) {
+      // Hide both buttons initially
+      skipFarmingButton.style.display = 'none';
+      endTurnButton.style.display = 'none';
+      
+      // If it's player's turn, show the appropriate button based on phase
+      if (GameState.isPlayerTurn()) {
+        if (GameState.getCurrentGamePhase() === 'farming') {
+          skipFarmingButton.style.display = 'block';
+        } else if (GameState.getCurrentGamePhase() === 'chess') {
+          endTurnButton.style.display = 'block';
+        }
       }
     }
   }
@@ -215,33 +241,40 @@ const UIManager = (function() {
     const skipFarmingButton = document.getElementById('skip-farming-button');
     const endTurnButton = document.getElementById('end-turn-button');
     
-    if (!phaseIndicator || !skipFarmingButton || !endTurnButton) {
-      console.warn('Game phase UI elements not found');
+    if (!phaseIndicator) {
+      console.warn('Game phase indicator element not found');
       return;
     }
     
     const currentPhase = GameState.getCurrentGamePhase();
     const isPlayerTurn = GameState.isPlayerTurn();
     
+    console.log(`Updating phase indicator. Current phase: ${currentPhase}, Is player's turn: ${isPlayerTurn}`);
+    
+    // Always show the phase indicator regardless of whose turn it is
+    phaseIndicator.style.display = 'block';
+    
     // Update phase indicator text and class
     phaseIndicator.textContent = currentPhase === 'farming' ? 'Farming Phase' : 'Chess Phase';
     phaseIndicator.classList.remove('farming-phase', 'chess-phase');
     phaseIndicator.classList.add(currentPhase === 'farming' ? 'farming-phase' : 'chess-phase');
     
-    // Show/hide appropriate buttons based on turn and phase
-    if (isPlayerTurn) {
-      phaseIndicator.style.display = 'block';
-      if (currentPhase === 'farming') {
-        skipFarmingButton.style.display = 'block';
-        endTurnButton.style.display = 'none';
+    // Only show action buttons if it's the player's turn
+    if (skipFarmingButton && endTurnButton) {
+      if (isPlayerTurn) {
+        // Show the appropriate button based on the current phase
+        if (currentPhase === 'farming') {
+          skipFarmingButton.style.display = 'block';
+          endTurnButton.style.display = 'none';
+        } else {
+          skipFarmingButton.style.display = 'none';
+          endTurnButton.style.display = 'block';
+        }
       } else {
+        // Hide both buttons if it's not the player's turn
         skipFarmingButton.style.display = 'none';
-        endTurnButton.style.display = 'block';
+        endTurnButton.style.display = 'none';
       }
-    } else {
-      phaseIndicator.style.display = 'block';
-      skipFarmingButton.style.display = 'none';
-      endTurnButton.style.display = 'none';
     }
   }
   

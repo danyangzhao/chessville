@@ -468,15 +468,14 @@
     /* Message notification */
     #message {
       position: fixed;
-      top: 20px;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background-color: #333;
+      background-color: rgba(0, 0, 0, 0.8);
       color: white;
       padding: 10px 20px;
       border-radius: 5px;
-      z-index: 1100;
-      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
       opacity: 0;
       transition: opacity 0.3s ease;
     }
@@ -552,6 +551,48 @@
     }
     
     body.player-black #player-white-area {
+      display: none;
+    }
+    
+    /* Debug Panel */
+    .debug-panel {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background-color: rgba(0, 0, 0, 0.9);
+      color: #44ff44;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 12px;
+      width: 300px;
+      max-height: 400px;
+      overflow-y: auto;
+      z-index: 2000;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+    
+    .debug-panel h3 {
+      margin-top: 0;
+      color: white;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    
+    .debug-panel button {
+      background-color: #333;
+      color: white;
+      border: 1px solid #666;
+      padding: 5px 10px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+    
+    .debug-panel button:hover {
+      background-color: #555;
+    }
+    
+    .debug-panel.hidden {
       display: none;
     }
   </style>
@@ -640,6 +681,13 @@
   
   <!-- Message notification -->
   <div id="message"></div>
+  
+  <!-- Debug Panel -->
+  <div id="debug-panel" class="debug-panel hidden">
+    <h3>Debug Information</h3>
+    <div id="debug-info"></div>
+    <button id="debug-close-btn">Close</button>
+  </div>
   
   <!-- Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>

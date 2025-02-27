@@ -30,7 +30,7 @@ const GameConfig = {
       yield: 15
     },
     corn: {
-      name: "Corn",
+      name: "Corn", // This is still named corn but it produces wheat resource
       emoji: "🌽",
       cost: 10,
       turnsTillHarvest: 3,

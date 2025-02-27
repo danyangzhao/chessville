@@ -230,10 +230,18 @@ const GameState = (function() {
     // Reset to farming phase
     setCurrentGamePhase('farming');
     
+    // Reset farm action flag for new turn
+    farmActionTaken = false;
+    
     console.log(`Turn changed. Current turn: ${currentTurn}`);
     
     // Update the UI
     UIManager.updateTurnIndicator();
+    
+    // If it's now my turn, show a notification
+    if (isPlayerTurn()) {
+      showMessage('YOUR TURN - Farming Phase!', 5000);
+    }
   }
   
   /**
