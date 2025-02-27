@@ -622,6 +622,37 @@ const FarmManager = (function() {
     console.log(`Opponent unlocked plot ${plotId}`);
   }
   
+  /**
+   * Check if a farm belongs to the player
+   * @param {string} playerColor - The player color
+   * @returns {boolean} True if the farm belongs to the player
+   */
+  function isPlayersFarm(playerColor) {
+    return playerColor === GameState.getPlayerColor();
+  }
+  
+  /**
+   * Check if a plot is available for planting
+   * @param {string} playerColor - The player color
+   * @param {number} plotIndex - The plot index
+   * @returns {boolean} True if the plot is available
+   */
+  function isPlotAvailable(playerColor, plotIndex) {
+    if (!farms[playerColor] || !farms[playerColor].plots[plotIndex]) {
+      return false;
+    }
+    
+    return farms[playerColor].plots[plotIndex].state === 'empty';
+  }
+  
+  /**
+   * Display the updated farms in the UI
+   * This is an alias for updateFarmDisplay for backward compatibility
+   */
+  function displayFarms() {
+    updateFarmDisplay();
+  }
+  
   // Public API
   return {
     initialize,

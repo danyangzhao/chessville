@@ -403,6 +403,16 @@ const GameState = (function() {
       opponentConnected = status;
       if (status) UIManager.updateGameStatus();
     },
-    getWinner: () => winner
+    getWinner: () => winner,
+    
+    // Additional setters
+    setCurrentTurn: (turn) => {
+      if (turn === 'white' || turn === 'black') {
+        currentTurn = turn;
+        console.log(`Current turn set to: ${turn}`);
+      } else {
+        console.error(`Invalid turn value: ${turn}`);
+      }
+    }
   };
 })(); 

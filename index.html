@@ -545,6 +545,15 @@
       border: 2px solid #4CAF50;
       box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
     }
+    
+    /* CSS for showing only the player's farm */
+    body.player-white #player-black-area {
+      display: none;
+    }
+    
+    body.player-black #player-white-area {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -586,8 +595,8 @@
       
       <div class="main-game-area">
         <div class="player-areas">
-          <!-- Player 1 (White) Farm -->
-          <div class="player-area">
+          <!-- Only show the player's own farm - we'll use CSS to conditionally display it -->
+          <div class="player-area" id="player-white-area">
             <div class="player-header" id="player1-header">
               <div>White's Farm</div>
               <div>Wheat: <span id="player1-wheat">25</span></div>
@@ -598,8 +607,8 @@
           <!-- Chess Board -->
           <div class="chess-board" id="chess-board"></div>
           
-          <!-- Player 2 (Black) Farm -->
-          <div class="player-area">
+          <!-- The player's farm if they are black -->
+          <div class="player-area" id="player-black-area">
             <div class="player-header" id="player2-header">
               <div>Black's Farm</div>
               <div>Wheat: <span id="player2-wheat">25</span></div>

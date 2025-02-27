@@ -196,15 +196,21 @@ const SocketManager = (function() {
     
     socket.on('turn-change', (data) => {
       console.log('Turn changed:', data);
-      GameState.setCurrentTurn(data.color);
-      UIManager.updateTurnIndicator();
-      
-      if (GameState.isPlayerTurn()) {
-        GameState.setCurrentGamePhase('farming');
-        UIManager.updateGamePhaseIndicator('farming');
-        showMessage('Your turn - Farming Phase');
+      // Update the current turn in GameState
+      if (data.color === 'white' || data.color === 'black') {
+        // Switch to the new turn
+        GameState.setCurrentTurn(data.color);
+        UIManager.updateTurnIndicator();
+        
+        if (GameState.isPlayerTurn()) {
+          GameState.setCurrentGamePhase('farming');
+          UIManager.updateGamePhaseIndicator('farming');
+          showMessage('Your turn - Farming Phase');
+        } else {
+          showMessage('Opponent\'s turn');
+        }
       } else {
-        showMessage('Opponent\'s turn');
+        console.error('Invalid turn color received:', data.color);
       }
     });
     
@@ -291,6 +297,40 @@ const SocketManager = (function() {
   }
   
   /**
+   * Send a farm update to the server
+   * @param {string} action - The action type (plant, harvest, unlock)
+   * @param {Object} data - The action data
+   */
+  function sendFarmUpdate(action, data) {
+    if (!socket || !roomId) {
+      console.error('Socket or room ID not initialized');
+      return;
+    }
+    
+    console.log('Sending farm update:', action, data);
+    
+    socket.emit('farm-action', {
+      roomId: roomId,
+      action: action,
+      data: data
+    });
+  }
+  
+  /**
+   * Send a plant crop action to the server
+   * @param {number} plotIndex - The index of the plot
+   * @param {string} cropType - The type of crop
+   */
+  function sendPlantCrop(plotIndex, cropType) {
+    sendFarmUpdate('plant', {
+      plotIndex: plotIndex,
+      cropType: cropType
+    });
+    
+    console.log(`Sent plant crop action: plot ${plotIndex}, crop ${cropType}`);
+  }
+  
+  /**
    * Send a phase change to the server
    * @param {string} phase - The new phase (farming or chess)
    */
@@ -348,6 +388,8 @@ const SocketManager = (function() {
     joinRoom,
     sendChessMove,
     sendFarmAction,
+    sendFarmUpdate,
+    sendPlantCrop,
     sendPhaseChange,
     sendEndTurn,
     sendGameOver

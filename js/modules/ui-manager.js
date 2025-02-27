@@ -265,28 +265,35 @@ const UIManager = (function() {
   }
   
   /**
-   * Set up the game UI after a game has been joined
+   * Set up the game UI with player-specific information
    * @param {string} roomId - The room ID
    * @param {string} playerColor - The player's color
    */
   function setupGameUI(roomId, playerColor) {
-    console.log(`Setting up game UI for room ${roomId}, player color: ${playerColor}`);
-    
-    // Update room and player info
+    // Update room ID and player color display
     const roomIdDisplay = document.getElementById('room-id-display');
     const playerColorDisplay = document.getElementById('player-color');
     
-    if (roomIdDisplay) roomIdDisplay.textContent = roomId;
-    if (playerColorDisplay) playerColorDisplay.textContent = playerColor;
+    if (roomIdDisplay) {
+      roomIdDisplay.textContent = roomId;
+    }
     
-    // Initialize farm displays
+    if (playerColorDisplay) {
+      playerColorDisplay.textContent = playerColor.charAt(0).toUpperCase() + playerColor.slice(1);
+    }
+    
+    // Add the player's color as a class to the body
+    document.body.classList.add(`player-${playerColor}`);
+    
+    // Initialize the board
     FarmManager.initializeFarmDisplay();
     
-    // Update turn indicator
-    updateTurnIndicator();
+    // Set up event listeners
+    const skipFarmingButton = document.getElementById('skip-farming-button');
+    const endTurnButton = document.getElementById('end-turn-button');
     
-    // Show game screen
-    showScreen('game-screen');
+    // Update UI based on player's turn
+    updateTurnIndicator();
   }
   
   /**
@@ -323,8 +330,14 @@ const UIManager = (function() {
           // Close the overlay
           overlay.style.display = 'none';
           
+          // Extract plot index from plot ID
+          const plotIndex = parseInt(selectedPlotId.split('-').pop());
+          
+          // Get crop data from GameConfig
+          const cropData = GameConfig.crops[cropType];
+          
           // Plant the crop
-          FarmManager.plantCrop(selectedPlotId, cropType);
+          FarmManager.plantCrop(playerColor, plotIndex, cropData);
         } else {
           showMessage(`Not enough wheat to plant ${cropType}!`);
         }
