@@ -61,6 +61,29 @@ const SocketManager = (function() {
     });
     
     // Game events
+    socket.on('playerAssigned', (data) => {
+      console.log('Player assigned to room:', data);
+      roomId = data.roomId;
+      
+      // Initialize the game with the provided data
+      GameState.setupGame(data.roomId, data.color);
+      UIManager.setupGameUI(data.roomId, data.color);
+      
+      // Waiting for opponent
+      UIManager.updateGameStatus('Waiting for opponent...');
+      
+      // If not first player, game is already in progress
+      if (!data.isFirstPlayer) {
+        UIManager.updateGameStatus('Joining existing game...');
+      }
+    });
+    
+    socket.on('roomFull', (data) => {
+      console.log('Room is full:', data);
+      UIManager.updateGameStatus('Room is full. Please try another room.');
+      showMessage('Room is full. Please try another room.');
+    });
+    
     socket.on('room-joined', (data) => {
       console.log('Joined room:', data);
       roomId = data.roomId;
@@ -106,8 +129,26 @@ const SocketManager = (function() {
       showMessage('Opponent disconnected');
     });
     
-    socket.on('game-started', (data) => {
+    socket.on('gameStart', (data) => {
       console.log('Game started:', data);
+      GameState.startGame();
+      ChessManager.setupBoard();
+      
+      // Update UI based on whether it's the player's turn
+      if (GameState.isPlayerTurn()) {
+        UIManager.updateGamePhaseIndicator('farming');
+        showMessage('Your turn! Start with the farming phase');
+      } else {
+        UIManager.updateTurnIndicator();
+        showMessage('Opponent\'s turn');
+      }
+      
+      // Show the game screen
+      UIManager.showScreen('game-screen');
+    });
+    
+    socket.on('game-started', (data) => {
+      console.log('Game started (legacy event):', data);
       GameState.startGame();
       ChessManager.setupBoard();
       
@@ -185,7 +226,7 @@ const SocketManager = (function() {
     
     console.log('Joining room with username:', username, 'roomId:', roomId);
     
-    socket.emit('join-room', {
+    socket.emit('joinGame', {
       username: username,
       roomId: roomId
     });
