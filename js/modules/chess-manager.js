@@ -139,7 +139,8 @@ const ChessManager = (function() {
         orientation: orientation,
         onDragStart: onDragStart,
         onDrop: onDrop,
-        onSnapEnd: onSnapEnd
+        onSnapEnd: onSnapEnd,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
       };
       
       // Initialize the board
