@@ -32,6 +32,9 @@ const ChessManager = (function() {
       // Set up the board when the UI is ready
       setTimeout(setupBoard, 100);
       
+      // Fix touch events for mobile
+      setupTouchEventFixes();
+      
       console.log('Chess Manager initialized');
       initialized = true;
       return true;
@@ -39,6 +42,25 @@ const ChessManager = (function() {
       console.error('Failed to initialize Chess Manager:', error);
       return false;
     }
+  }
+  
+  /**
+   * Setup fixes for touch events on mobile devices
+   */
+  function setupTouchEventFixes() {
+    // Add this to prevent the "passive event listener" warnings
+    document.addEventListener('DOMContentLoaded', function() {
+      const boardContainer = document.getElementById('chess-container');
+      if (boardContainer) {
+        // Prevent touchmove events on the board from scrolling the page
+        boardContainer.addEventListener('touchmove', function(e) {
+          // Only prevent default during piece dragging
+          if (GameState.getCurrentGamePhase() === 'chess' && GameState.isPlayerTurn()) {
+            e.preventDefault();
+          }
+        }, { passive: false });
+      }
+    });
   }
   
   /**
@@ -78,17 +100,41 @@ const ChessManager = (function() {
     if (GameState.getPlayerColor() === 'black') {
       boardElement.style.transform = 'rotate(180deg)';
       
-      // Flip all pieces
-      const pieces = boardElement.querySelectorAll('.piece-417db');
-      pieces.forEach(piece => {
-        piece.style.transform = 'rotate(180deg)';
+      // Flip all pieces - use a more generic selector since class names might vary
+      rotatePiecesForBlackPlayer(boardElement);
+      
+      // Set up a mutation observer to rotate pieces that get added later
+      const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+          if (mutation.addedNodes.length) {
+            rotatePiecesForBlackPlayer(boardElement);
+          }
+        });
       });
+      
+      // Start observing changes to the board
+      observer.observe(boardElement, { childList: true, subtree: true });
     }
     
     // Update the move costs display
     showMoveCosts();
     
     console.log('Chessboard set up');
+  }
+  
+  /**
+   * Helper function to rotate all chess pieces for black player
+   * @param {HTMLElement} boardElement - The chess board element
+   */
+  function rotatePiecesForBlackPlayer(boardElement) {
+    // Try multiple possible selectors that ChessboardJS might use
+    const pieceElements = boardElement.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
+    console.log(`Found ${pieceElements.length} chess pieces to rotate`);
+    
+    pieceElements.forEach(piece => {
+      // Remove any existing rotation to avoid compounding rotations
+      piece.style.transform = 'rotate(180deg)';
+    });
   }
   
   /**

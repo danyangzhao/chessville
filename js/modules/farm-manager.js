@@ -135,15 +135,40 @@ const FarmManager = (function() {
       `;
     } else if (plot.state === 'planted') {
       // Planted plot with crop
-      const growthClass = getGrowthClass(plot.turnsToHarvest, plot.crop.turnsTillHarvest);
+      if (!plot.crop) {
+        console.error('Plot is in planted state but crop data is missing', plot);
+        plotElement.innerHTML = `<div class="error">Error: Missing crop data</div>`;
+        return plotElement;
+      }
+      
+      // Use the correct property names and provide fallbacks
+      const cropName = plot.crop.name || plot.crop.type || 'Crop';
+      const cropEmoji = plot.crop.emoji || '🌱';
+      const turnsTillHarvest = plot.crop.turnsTillHarvest || plot.turnsToHarvest || 0;
+      
+      // Get the growth stage
+      const growthClass = getGrowthClass(plot.turnsToHarvest, turnsTillHarvest);
+      
       plotElement.innerHTML = `
-        <div class="plant ${growthClass}">${plot.crop.emoji}</div>
+        <div class="plant ${growthClass}">${cropEmoji}</div>
+        <div class="crop-name">${cropName}</div>
         <div class="growth-info">${plot.turnsToHarvest} turns</div>
       `;
     } else if (plot.state === 'ready') {
       // Ready to harvest
+      if (!plot.crop) {
+        console.error('Plot is in ready state but crop data is missing', plot);
+        plotElement.innerHTML = `<div class="error">Error: Missing crop data</div>`;
+        return plotElement;
+      }
+      
+      // Use the correct property names and provide fallbacks
+      const cropName = plot.crop.name || plot.crop.type || 'Crop';
+      const cropEmoji = plot.crop.emoji || '🌱';
+      
       plotElement.innerHTML = `
-        <div class="plant mature">${plot.crop.emoji}</div>
+        <div class="plant mature">${cropEmoji}</div>
+        <div class="crop-name">${cropName}</div>
         <button class="harvest-button" data-plot-id="${plot.id}">Harvest</button>
       `;
     } else {
@@ -279,14 +304,20 @@ const FarmManager = (function() {
       return false;
     }
     
-    // Update farm state
+    // Update farm state - FIXING: Store complete crop object with proper property names
     farms[playerColor].plots[plotIndex] = {
+      id: `${playerColor}-plot-${plotIndex}`,
+      index: plotIndex,
       state: 'planted',
-      crop: cropData.type,
-      growthStage: 0,
-      maxGrowthStage: cropData.growthTime || 3,
-      timeToHarvest: cropData.growthTime || 3,
-      yield: cropData.yield || 1
+      crop: {
+        type: cropData.type,
+        name: cropData.name,
+        emoji: cropData.emoji,
+        turnsTillHarvest: cropData.growthTime,
+        yield: cropData.yield,
+        cost: cropData.cost
+      },
+      turnsToHarvest: cropData.growthTime
     };
     
     // Register the farm action - this marks that the player has taken an action this turn
@@ -298,7 +329,7 @@ const FarmManager = (function() {
     // Notify the server
     SocketManager.sendPlantCrop(plotIndex, cropData.type);
     
-    showMessage(`Planted ${cropData.type} in plot ${plotIndex+1}`);
+    showMessage(`Planted ${cropData.name} in plot ${plotIndex+1}`);
     
     // Auto-skip to chess phase after planting
     setTimeout(() => {
@@ -584,9 +615,20 @@ const FarmManager = (function() {
       return;
     }
     
-    // Plant the crop
+    // Determine the player color from plot ID
+    const playerColor = plotId.startsWith('white-') ? 'white' : 'black';
+    const plotIndex = parseInt(plotId.split('-').pop());
+    
+    // Plant the crop - store with consistent data structure
     plot.state = 'planted';
-    plot.crop = cropData;
+    plot.crop = {
+      type: cropType,
+      name: cropData.name,
+      emoji: cropData.emoji,
+      turnsTillHarvest: cropData.turnsTillHarvest,
+      yield: cropData.yield,
+      cost: cropData.cost
+    };
     plot.turnsToHarvest = cropData.turnsTillHarvest;
     
     console.log(`Opponent planted ${cropData.name} in plot ${plotId}`);
