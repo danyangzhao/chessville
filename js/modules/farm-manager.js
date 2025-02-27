@@ -623,6 +623,40 @@ const FarmManager = (function() {
   }
   
   /**
+   * Process a farm action received from the server
+   * @param {Object} action - The action object containing type and data
+   */
+  function processFarmAction(action) {
+    console.log('Processing farm action from server:', action);
+    
+    if (!action || !action.action || !action.data) {
+      console.error('Invalid farm action received:', action);
+      return;
+    }
+    
+    // Handle different action types
+    switch (action.action) {
+      case 'plant':
+        processFarmUpdatePlant(action.data);
+        break;
+      case 'harvest':
+        processFarmUpdateHarvest(action.data);
+        break;
+      case 'unlock':
+        processFarmUpdateUnlock(action.data);
+        break;
+      default:
+        console.warn(`Unknown farm action type: ${action.action}`);
+    }
+    
+    // Update the farm display
+    updateFarmDisplay();
+    
+    // Update resources
+    UIManager.updateResourceDisplay();
+  }
+  
+  /**
    * Check if a farm belongs to the player
    * @param {string} playerColor - The player color
    * @returns {boolean} True if the farm belongs to the player
@@ -653,6 +687,51 @@ const FarmManager = (function() {
     updateFarmDisplay();
   }
   
+  /**
+   * Update farms data from server
+   * @param {Object} serverFarms - The farms data from the server
+   */
+  function updateFarmsFromServer(serverFarms) {
+    console.log('Updating farms from server:', serverFarms);
+    
+    // Update white farm data
+    if (serverFarms.white) {
+      // Update wheat
+      if (typeof serverFarms.white.wheat === 'number') {
+        farms.white.wheat = serverFarms.white.wheat;
+      }
+      
+      // Update plots
+      if (Array.isArray(serverFarms.white.plots)) {
+        farms.white.plots = serverFarms.white.plots.map(plot => ({
+          ...plot,
+          // Ensure the plot has an id if not provided
+          id: plot.id || `white-plot-${plot.index || 0}`
+        }));
+      }
+    }
+    
+    // Update black farm data
+    if (serverFarms.black) {
+      // Update wheat
+      if (typeof serverFarms.black.wheat === 'number') {
+        farms.black.wheat = serverFarms.black.wheat;
+      }
+      
+      // Update plots
+      if (Array.isArray(serverFarms.black.plots)) {
+        farms.black.plots = serverFarms.black.plots.map(plot => ({
+          ...plot,
+          // Ensure the plot has an id if not provided
+          id: plot.id || `black-plot-${plot.index || 0}`
+        }));
+      }
+    }
+    
+    // Update the farm display to reflect changes
+    updateFarmDisplay();
+  }
+  
   // Public API
   return {
     initialize,
@@ -663,6 +742,8 @@ const FarmManager = (function() {
     checkUnlockPlot,
     processTurn,
     updateFarmDisplay,
-    processFarmUpdate
+    processFarmUpdate,
+    updateFarmsFromServer,
+    processFarmAction
   };
 })(); 

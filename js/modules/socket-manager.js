@@ -232,6 +232,46 @@ const SocketManager = (function() {
       }
     });
     
+    socket.on('gameStateUpdate', (data) => {
+      console.log('Received game state update:', data);
+      
+      // Update game state
+      if (data.gameState) {
+        GameState.updateFromServer(data.gameState);
+      }
+      
+      // Update current turn
+      if (data.currentTurn) {
+        console.log(`Server says current turn is: ${data.currentTurn}`);
+        GameState.setCurrentTurn(data.currentTurn);
+        UIManager.updateTurnIndicator();
+        
+        // Check if it's now the player's turn and show notification
+        if (GameState.isPlayerTurn()) {
+          console.log('It is now this player\'s turn (from gameStateUpdate)');
+          GameState.setCurrentGamePhase('farming');
+          UIManager.updateGamePhaseIndicator('farming');
+          
+          // Show notification
+          showMessage('YOUR TURN - Farming Phase!', 5000);
+          
+          // Optional: play a sound if available to alert the player
+          if (window.Audio) {
+            try {
+              const turnSound = new Audio('./sounds/yourturn.mp3');
+              turnSound.play().catch(e => console.warn('Could not play turn notification sound:', e));
+            } catch (e) {
+              console.warn('Sound playback not supported:', e);
+            }
+          }
+        }
+      }
+      
+      // Update farm display and resources
+      FarmManager.updateFarmDisplay();
+      UIManager.updateResourceDisplay();
+    });
+    
     socket.on('game-over', (data) => {
       console.log('Game over:', data);
       UIManager.showGameOver(data.winner, data.reason);

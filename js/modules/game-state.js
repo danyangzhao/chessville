@@ -395,6 +395,31 @@ const GameState = (function() {
     getCapturedPieces,
     declareWinner,
     
+    // Sync with server
+    updateFromServer: (serverGameState) => {
+      console.log('Updating game state from server:', serverGameState);
+      
+      // Update resources if they exist in the server state
+      if (serverGameState.farms) {
+        // Get the wheat from each player's farm
+        if (serverGameState.farms.white && typeof serverGameState.farms.white.wheat === 'number') {
+          resources.white.wheat = serverGameState.farms.white.wheat;
+        }
+        
+        if (serverGameState.farms.black && typeof serverGameState.farms.black.wheat === 'number') {
+          resources.black.wheat = serverGameState.farms.black.wheat;
+        }
+        
+        // Update the farm data in FarmManager if available
+        if (typeof FarmManager.updateFarmsFromServer === 'function') {
+          FarmManager.updateFarmsFromServer(serverGameState.farms);
+        }
+      }
+      
+      // Update UI elements
+      UIManager.updateResourceDisplay();
+    },
+    
     // Getters
     getRoomId: () => roomId,
     getPlayerColor: () => playerColor,
