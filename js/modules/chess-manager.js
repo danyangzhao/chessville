@@ -100,18 +100,23 @@ const ChessManager = (function() {
    * @returns {boolean} Whether the drag is allowed
    */
   function onDragStart(source, piece, position, orientation) {
+    console.log(`Attempting to drag piece from ${source}: ${piece}`);
+    
     // Do not allow dragging if the game is over
     if (chessEngine.game_over()) {
+      console.log('Game is over, cannot move pieces');
       return false;
     }
     
     // Only allow the current player to move pieces
     if (!GameState.isPlayerTurn()) {
+      console.log('Not your turn, cannot move pieces');
       return false;
     }
     
     // Only allow dragging in the chess phase
     if (GameState.getCurrentGamePhase() !== 'chess') {
+      console.log('Not in chess phase, cannot move pieces');
       showMessage('You can only move pieces during the chess phase');
       return false;
     }
@@ -120,9 +125,11 @@ const ChessManager = (function() {
     const playerColor = GameState.getPlayerColor();
     if ((playerColor === 'white' && piece.search(/^b/) !== -1) ||
         (playerColor === 'black' && piece.search(/^w/) !== -1)) {
+      console.log(`Cannot move opponent's pieces (${piece})`);
       return false;
     }
     
+    console.log(`Drag allowed for ${piece} from ${source}`);
     return true;
   }
   

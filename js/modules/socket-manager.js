@@ -105,14 +105,20 @@ const SocketManager = (function() {
       console.log('Opponent joined:', data);
       GameState.setOpponentConnected(true);
       UIManager.updateGameStatus('Opponent joined');
+      
+      // Show the game screen
       UIManager.showScreen('game-screen');
       
       // Start the game if both players are ready
       if (data.startGame) {
         GameState.startGame();
         
+        // Setup chess board
+        ChessManager.setupBoard();
+        
         // Update UI based on whether it's the player's turn
         if (GameState.isPlayerTurn()) {
+          GameState.setCurrentGamePhase('farming');
           UIManager.updateGamePhaseIndicator('farming');
           showMessage('Your turn! Start with the farming phase');
         } else {
@@ -222,6 +228,13 @@ const SocketManager = (function() {
     if (!socket) {
       console.error('Socket not initialized');
       return;
+    }
+    
+    // If roomId is the username (which happens when user types in room code in the username field)
+    // then use that as the roomId and set username to a default value
+    if (roomId === '' && username !== '') {
+      roomId = username;
+      username = 'Player';
     }
     
     console.log('Joining room with username:', username, 'roomId:', roomId);

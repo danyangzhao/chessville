@@ -168,8 +168,19 @@ const GameState = (function() {
    */
   function skipCurrentGamePhase() {
     if (currentGamePhase === 'farming') {
-      completeCurrentGamePhase();
-      console.log('Farming phase skipped');
+      // Mark farming phase as completed
+      gamePhaseCompleted.farming = true;
+      
+      // Move to chess phase
+      setCurrentGamePhase('chess');
+      
+      // Notify the server about the phase change
+      SocketManager.sendPhaseChange('chess');
+      
+      console.log('Farming phase skipped, now in chess phase');
+      
+      // Update UI
+      UIManager.updateGamePhaseIndicator('chess');
     }
   }
   
