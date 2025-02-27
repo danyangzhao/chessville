@@ -7,6 +7,17 @@ const ChessManager = (function() {
   let initialized = false;
   let chessEngine = null;
   let chessboard = null;
+  let debugMode = true; // Enable debug mode to help diagnose issues
+  
+  /**
+   * Log debug information if debug mode is enabled
+   * @param {...any} args - Arguments to log
+   */
+  function debugLog(...args) {
+    if (debugMode) {
+      console.log('[ChessManager Debug]', ...args);
+    }
+  }
   
   /**
    * Initialize the Chess Manager
@@ -81,77 +92,110 @@ const ChessManager = (function() {
   }
   
   /**
-   * Set up the chessboard
+   * Set up the chess board
    */
   function setupBoard() {
-    const boardElement = document.getElementById('chess-board');
-    if (!boardElement) {
-      console.warn('Chessboard element not found');
-      return;
-    }
-    
-    if (!chessEngine) {
-      console.error('Chess engine not initialized');
-      return;
-    }
-    
-    // Clear any existing board
-    if (chessboard) {
-      chessboard.clear();
-    }
-    
-    // Configure the board
-    const config = {
-      draggable: true,
-      position: chessEngine.fen(),
-      pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-      onDragStart: onDragStart,
-      onDrop: onDrop,
-      onSnapEnd: onSnapEnd
-    };
-    
-    // Create the chessboard
-    chessboard = Chessboard(boardElement.id, config);
-    
-    // Flip the board if the player is black
-    if (GameState.getPlayerColor() === 'black') {
-      boardElement.style.transform = 'rotate(180deg)';
+    try {
+      debugLog('Setting up chess board');
       
-      // Flip all pieces - use a more generic selector since class names might vary
-      rotatePiecesForBlackPlayer(boardElement);
+      // Make sure the container exists
+      const boardContainer = document.getElementById('chessboard');
+      if (!boardContainer) {
+        console.error('Chess board container not found');
+        return;
+      }
       
-      // Set up a mutation observer to rotate pieces that get added later
-      const observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-          if (mutation.addedNodes.length) {
-            rotatePiecesForBlackPlayer(boardElement);
-          }
-        });
+      // Clear any existing board
+      boardContainer.innerHTML = '';
+      
+      // Ensure chess engine is initialized properly
+      if (!chessEngine) {
+        debugLog('Creating new chess engine instance');
+        chessEngine = new Chess();
+      } else {
+        debugLog('Resetting existing chess engine to starting position');
+        chessEngine.reset();
+      }
+      
+      // Get player color based on socket ID
+      const isPlayer1 = SocketManager.getSocketId() === GameState.getPlayer1Id();
+      const orientation = isPlayer1 ? 'white' : 'black';
+      
+      debugLog(`Player is ${isPlayer1 ? 'Player 1 (White)' : 'Player 2 (Black)'}`);
+      debugLog(`Board orientation: ${orientation}`);
+      
+      // Debug chess engine state
+      debugLog(`Chess engine current position: ${chessEngine.fen()}`);
+      debugLog(`Chess engine current turn: ${chessEngine.turn()}`);
+      debugLog('Available legal moves:', chessEngine.moves({ verbose: true }));
+      
+      // Configure the board
+      const config = {
+        draggable: true,
+        position: chessEngine.fen(),
+        orientation: orientation,
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd
+      };
+      
+      // Initialize the board
+      debugLog('Initializing chessboard.js with config:', config);
+      chessboard = Chessboard('chessboard', config);
+      
+      // Setup resize handler
+      window.addEventListener('resize', () => {
+        if (chessboard) {
+          chessboard.resize();
+        }
       });
       
-      // Start observing changes to the board
-      observer.observe(boardElement, { childList: true, subtree: true });
+      // If black player, rotate pieces
+      if (orientation === 'black') {
+        debugLog('Rotating pieces for black player');
+        const pieces = document.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
+        debugLog(`Found ${pieces.length} pieces to rotate`);
+        
+        pieces.forEach(piece => {
+          piece.style.transform = 'rotate(180deg)';
+        });
+        
+        // Set up a mutation observer to handle new pieces added later
+        const observer = new MutationObserver(mutations => {
+          mutations.forEach(mutation => {
+            if (mutation.addedNodes.length) {
+              mutation.addedNodes.forEach(node => {
+                if (node.nodeType === 1) { // Element node
+                  const newPieces = node.querySelectorAll ? 
+                    node.querySelectorAll('img[data-piece], .piece, [class*="piece-"]') : [];
+                  
+                  if (node.matches && node.matches('img[data-piece], .piece, [class*="piece-"]')) {
+                    debugLog('Rotating newly added piece:', node);
+                    node.style.transform = 'rotate(180deg)';
+                  }
+                  
+                  if (newPieces.length) {
+                    debugLog(`Rotating ${newPieces.length} new pieces added to the DOM`);
+                    newPieces.forEach(piece => {
+                      piece.style.transform = 'rotate(180deg)';
+                    });
+                  }
+                }
+              });
+            }
+          });
+        });
+        
+        observer.observe(boardContainer, { 
+          childList: true, 
+          subtree: true 
+        });
+      }
+      
+      debugLog('Chess board setup complete');
+    } catch (error) {
+      console.error('Error setting up chess board:', error);
     }
-    
-    // Update the move costs display
-    showMoveCosts();
-    
-    console.log('Chessboard set up');
-  }
-  
-  /**
-   * Helper function to rotate all chess pieces for black player
-   * @param {HTMLElement} boardElement - The chess board element
-   */
-  function rotatePiecesForBlackPlayer(boardElement) {
-    // Try multiple possible selectors that ChessboardJS might use
-    const pieceElements = boardElement.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
-    console.log(`Found ${pieceElements.length} chess pieces to rotate`);
-    
-    pieceElements.forEach(piece => {
-      // Remove any existing rotation to avoid compounding rotations
-      piece.style.transform = 'rotate(180deg)';
-    });
   }
   
   /**
@@ -197,79 +241,127 @@ const ChessManager = (function() {
   }
   
   /**
-   * Handle a piece being dropped on the board
-   * @param {string} source - The source square
-   * @param {string} target - The target square
-   * @returns {string} 'snapback' to cancel the move, or undefined to allow it
+   * Handle piece drop - this is the core function that manages chess piece movement
+   * @param {string} source - Source square
+   * @param {string} target - Target square
+   * @param {string} piece - Piece being moved
+   * @param {Object} newPos - New position
+   * @param {Object} oldPos - Old position
+   * @param {string} orientation - Board orientation
+   * @returns {string|undefined} 'snapback' to cancel the move, or undefined to allow it
    */
-  function onDrop(source, target) {
-    console.log(`onDrop called: from ${source} to ${target}`);
+  function onDrop(source, target, piece, newPos, oldPos, orientation) {
+    debugLog(`onDrop called - Source: ${source}, Target: ${target}, Piece: ${piece}, Orientation: ${orientation}`);
+    debugLog(`Current turn: ${chessEngine.turn()}, FEN: ${chessEngine.fen()}`);
+    
+    // Log current piece positions for debugging
+    debugLog('Current position:', oldPos);
     
     // Do not allow moves if not in chess phase
     if (GameState.getCurrentGamePhase() !== 'chess') {
-      console.log('Move rejected: Not in chess phase');
+      debugLog('Move rejected: Not in chess phase');
       showMessage('You can only move pieces during the chess phase');
       return 'snapback';
     }
     
-    // Check if it's a valid move
-    const move = chessEngine.move({
-      from: source,
-      to: target,
-      promotion: 'q' // Always promote to queen for simplicity
-    });
+    // Check if it's the player's turn
+    const pieceColor = piece.charAt(0);
+    const playerColor = SocketManager.getSocketId() === GameState.getPlayer1Id() ? 'w' : 'b';
     
-    // Invalid move
-    if (move === null) {
-      console.log(`Move rejected: Invalid move from ${source} to ${target}`);
+    debugLog(`Piece color: ${pieceColor}, Player color: ${playerColor}`);
+    
+    if (pieceColor !== playerColor) {
+      debugLog(`Not your piece to move. Piece color: ${pieceColor}, Player color: ${playerColor}`);
       return 'snapback';
     }
     
-    console.log(`Valid move: ${JSON.stringify(move)}`);
-    
-    // Get the piece type
-    const pieceType = move.piece;
-    
-    // Calculate the move cost
-    const moveCost = GameConfig.pieceCosts[pieceType] || 0;
-    
-    // Check if player has enough wheat
-    const playerColor = GameState.getPlayerColor();
-    if (!GameState.updateWheat(playerColor, -moveCost)) {
-      // Undo the move
-      chessEngine.undo();
-      showMessage(`Not enough wheat to move this piece (cost: ${moveCost})`);
+    // Verify it's the player's turn
+    if (chessEngine.turn() !== playerColor) {
+      debugLog(`Not your turn. Engine turn: ${chessEngine.turn()}, Player color: ${playerColor}`);
       return 'snapback';
     }
     
-    // Check if a piece was captured
-    if (move.captured) {
-      console.log(`Captured a ${move.captured} piece!`);
-      GameState.recordCapture(playerColor);
-      showMessage(`Captured ${getPieceName(move.captured)}!`);
+    // Log legal moves for debugging
+    const legalMoves = chessEngine.moves({ verbose: true });
+    debugLog('Legal moves:', legalMoves);
+    
+    // Check if the move is valid
+    try {
+      const moveConfig = {
+        from: source,
+        to: target,
+        promotion: 'q' // Always promote to queen for simplicity
+      };
+      
+      debugLog('Attempting move with config:', moveConfig);
+      
+      // Debug current board position
+      debugLog('Current FEN before move:', chessEngine.fen());
+      
+      // Attempt the move
+      const move = chessEngine.move(moveConfig);
+      
+      // If the move is invalid, it will return null
+      if (move === null) {
+        debugLog(`Move rejected: Invalid move from ${source} to ${target}`);
+        
+        // Check if any legal move exists for this piece
+        const movesForPiece = legalMoves.filter(m => m.from === source);
+        debugLog(`Legal moves for piece at ${source}:`, movesForPiece);
+        
+        return 'snapback';
+      }
+      
+      // Log the successful move
+      debugLog('Move successful:', move);
+      
+      // Get the piece type
+      const pieceType = move.piece;
+      
+      // Calculate the move cost
+      const moveCost = GameConfig.pieceCosts[pieceType] || 0;
+      
+      // Check if player has enough wheat
+      const gamePlayerColor = GameState.getPlayerColor();
+      if (!GameState.updateWheat(gamePlayerColor, -moveCost)) {
+        // Undo the move
+        chessEngine.undo();
+        showMessage(`Not enough wheat to move this piece (cost: ${moveCost})`);
+        return 'snapback';
+      }
+      
+      // Check if a piece was captured
+      if (move.captured) {
+        debugLog(`Captured a ${move.captured} piece!`);
+        GameState.recordCapture(gamePlayerColor);
+        showMessage(`Captured ${getPieceName(move.captured)}!`);
+      }
+      
+      // Update the server
+      SocketManager.sendChessMove(move);
+      
+      // Check for checkmate
+      if (chessEngine.in_checkmate()) {
+        GameState.declareWinner(gamePlayerColor, 'checkmate');
+        showMessage('Checkmate!');
+      } else if (chessEngine.in_check()) {
+        showMessage('Check!');
+      }
+      
+      // Update the move cost display
+      showMoveCosts();
+      
+      // Auto-end turn after chess move
+      setTimeout(() => {
+        GameState.endTurn();
+        showMessage('Automatically ending turn after chess move');
+      }, 1000); // 1 second delay to allow for visual feedback
+      
+      return undefined;
+    } catch (error) {
+      console.error('Error processing move:', error);
+      return 'snapback';
     }
-    
-    // Update the server
-    SocketManager.sendChessMove(move);
-    
-    // Check for checkmate
-    if (chessEngine.in_checkmate()) {
-      GameState.declareWinner(playerColor, 'checkmate');
-      showMessage('Checkmate!');
-    } else if (chessEngine.in_check()) {
-      showMessage('Check!');
-    }
-    
-    // Update the move cost display
-    showMoveCosts();
-    
-    // Auto-end turn after chess move
-    setTimeout(() => {
-      GameState.endTurn();
-      showMessage('Automatically ending turn after chess move');
-    }, 1000); // 1 second delay to allow for visual feedback
-    
-    return undefined;
   }
   
   /**
@@ -385,54 +477,65 @@ const ChessManager = (function() {
   }
   
   /**
-   * Completely refresh the chess board
-   * Force a refresh of the chess board and all pieces 
+   * Refresh the chess board with the current game state
+   * This function should be called when switching games or turns
    */
   function refreshBoard() {
-    console.log('Performing complete chess board refresh');
-    
-    if (!chessEngine) {
-      console.error('Cannot refresh board: Chess engine not initialized');
-      return;
-    }
-    
-    const boardElement = document.getElementById('chess-board');
-    if (!boardElement) {
-      console.warn('Cannot refresh board: Chessboard element not found');
-      return;
-    }
-    
-    // Store current state
-    const currentFEN = chessEngine.fen();
-    console.log(`Current FEN: ${currentFEN}`);
-    
-    // Clear the board
-    if (chessboard) {
-      chessboard.clear(false); // Don't fire events
-    }
-    
-    // Reconfigure and recreate the board
-    const config = {
-      draggable: true,
-      position: currentFEN,
-      pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-      onDragStart: onDragStart,
-      onDrop: onDrop,
-      onSnapEnd: onSnapEnd
-    };
-    
-    // Create the chessboard
-    chessboard = Chessboard(boardElement.id, config);
-    
-    // Flip the board if the player is black
-    if (GameState.getPlayerColor() === 'black') {
-      boardElement.style.transform = 'rotate(180deg)';
+    try {
+      debugLog('Refreshing chess board with current game state');
       
-      // Flip all pieces
-      rotatePiecesForBlackPlayer(boardElement);
+      // Ensure the chess engine exists
+      if (!chessEngine) {
+        debugLog('Chess engine not initialized, creating new instance');
+        chessEngine = new Chess();
+      }
+      
+      // Log current state for debugging
+      debugLog(`Current FEN: ${chessEngine.fen()}`);
+      debugLog(`Current turn: ${chessEngine.turn()}`);
+      debugLog('Legal moves:', chessEngine.moves({ verbose: true }));
+      
+      // Validate FEN string - if it's invalid, reset the board
+      if (!chessEngine.validate_fen(chessEngine.fen()).valid) {
+        debugLog('Invalid FEN detected, resetting to starting position');
+        chessEngine.reset();
+      }
+      
+      // If the chessboard exists, update its position
+      if (chessboard) {
+        debugLog('Updating chessboard position');
+        
+        // Get the current position from the chess engine
+        const currentPosition = chessEngine.fen();
+        
+        // Update the position on the board
+        chessboard.position(currentPosition, false); // false means no animation
+        
+        // Get player color based on socket ID
+        const isPlayer1 = SocketManager.getSocketId() === GameState.getPlayer1Id();
+        const orientation = isPlayer1 ? 'white' : 'black';
+        
+        // If black player, ensure pieces are rotated
+        if (orientation === 'black') {
+          debugLog('Rotating pieces for black player after refresh');
+          setTimeout(() => {
+            const pieces = document.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
+            debugLog(`Found ${pieces.length} pieces to rotate after refresh`);
+            
+            pieces.forEach(piece => {
+              piece.style.transform = 'rotate(180deg)';
+            });
+          }, 100); // Small delay to ensure DOM is updated
+        }
+      } else {
+        debugLog('Chessboard not initialized, setting up a new board');
+        setupBoard();
+      }
+      
+      debugLog('Chess board refresh complete');
+    } catch (error) {
+      console.error('Error refreshing chess board:', error);
     }
-    
-    console.log('Chess board refreshed');
   }
   
   // Public API
@@ -444,7 +547,22 @@ const ChessManager = (function() {
     showMoveCosts,
     refreshBoard,
     getCurrentFEN: function() {
-      return chessEngine ? chessEngine.fen() : null;
+      if (!chessEngine) {
+        console.error('Chess engine not initialized when getting FEN');
+        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // Default starting position
+      }
+      
+      const fen = chessEngine.fen();
+      debugLog(`Retrieving current FEN: ${fen}`);
+      
+      // Validate FEN string
+      const validation = chessEngine.validate_fen(fen);
+      if (!validation.valid) {
+        console.error('Invalid FEN detected in getCurrentFEN:', validation.error);
+        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // Return valid starting position
+      }
+      
+      return fen;
     }
   };
 })(); 

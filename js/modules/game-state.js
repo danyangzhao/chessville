@@ -128,11 +128,13 @@ const GameState = (function() {
    * @param {string} phase - The new game phase ('farming' or 'chess')
    */
   function setCurrentGamePhase(phase) {
+    // Validate the phase
     if (phase !== 'farming' && phase !== 'chess') {
       console.error(`Invalid game phase: ${phase}`);
       return;
     }
     
+    // Set the phase
     currentGamePhase = phase;
     
     // Reset the completed status for the new phase
@@ -147,6 +149,17 @@ const GameState = (function() {
     
     // Update the UI to reflect the new phase
     UIManager.updateGamePhaseIndicator();
+    
+    // If switching to chess phase, refresh the board to ensure sync
+    if (phase === 'chess') {
+      // Use setTimeout to ensure this runs after the phase change is complete
+      setTimeout(() => {
+        if (typeof ChessManager !== 'undefined' && ChessManager.refreshBoard) {
+          console.log('Refreshing chess board on phase change to chess');
+          ChessManager.refreshBoard();
+        }
+      }, 100);
+    }
   }
   
   /**

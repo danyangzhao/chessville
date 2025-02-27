@@ -169,21 +169,26 @@ const SocketManager = (function() {
     });
     
     socket.on('chess-move', (move) => {
-      console.log('Received chess move:', move);
+      console.log('Received chess move from opponent:', move);
+      
       // Process the move to update the engine state
       ChessManager.processChessMove(move);
       
-      // If FEN was provided with the move, validate board state
+      // Always refresh the board to ensure proper synchronization
+      setTimeout(() => {
+        console.log('Refreshing board after receiving opponent move');
+        ChessManager.refreshBoard();
+      }, 200); // Small delay to ensure everything is ready
+      
+      // Log the board state for debugging
       if (move.fen) {
         const currentFEN = ChessManager.getCurrentFEN();
-        console.log(`Received FEN: ${move.fen}`);
-        console.log(`Current FEN: ${currentFEN}`);
+        console.log(`Received FEN from opponent: ${move.fen}`);
+        console.log(`Local engine FEN after move: ${currentFEN}`);
         
-        // If there's a mismatch, refresh the board
+        // If there's a mismatch, log a warning
         if (currentFEN !== move.fen) {
-          console.warn('FEN mismatch detected, refreshing board');
-          // Force a complete refresh of the board
-          ChessManager.refreshBoard();
+          console.warn('FEN mismatch detected after applying move');
         }
       }
       
@@ -291,16 +296,21 @@ const SocketManager = (function() {
         UIManager.updateGamePhaseIndicator(data.phase);
       }
       
-      // Refresh the chess board to ensure it's in sync
-      if (data.phase === 'chess') {
+      // Always refresh the chess board to ensure it's in sync when turn changes,
+      // regardless of current phase
+      setTimeout(() => {
+        console.log('Refreshing chess board on turn change');
         ChessManager.refreshBoard();
-      }
+      }, 200); // Small delay to ensure everything is ready
       
       // Show prominent notification to player
-      showMessage('YOUR TURN - Farming Phase!', 5000);
-      
-      // Play a sound or other notification if implemented
-      // playTurnSound();
+      if (data.phase === 'farming') {
+        showMessage('YOUR TURN - Farming Phase!', 5000);
+      } else if (data.phase === 'chess') {
+        showMessage('YOUR TURN - Chess Phase!', 5000);
+      } else {
+        showMessage('YOUR TURN!', 5000);
+      }
     });
   }
   
