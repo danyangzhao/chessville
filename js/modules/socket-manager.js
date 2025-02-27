@@ -205,11 +205,24 @@ const SocketManager = (function() {
         GameState.setCurrentTurn(data.color);
         UIManager.updateTurnIndicator();
         
+        // Check if it's now the player's turn and show a more prominent notification
         if (GameState.isPlayerTurn()) {
           console.log('It is now this player\'s turn');
           GameState.setCurrentGamePhase('farming');
           UIManager.updateGamePhaseIndicator('farming');
-          showMessage('Your turn - Farming Phase');
+          
+          // Make the notification more prominent and with longer duration
+          showMessage('YOUR TURN - Farming Phase!', 5000);
+          
+          // Optional: play a sound if available to alert the player
+          if (window.Audio) {
+            try {
+              const turnSound = new Audio('./sounds/yourturn.mp3');
+              turnSound.play().catch(e => console.warn('Could not play turn notification sound:', e));
+            } catch (e) {
+              console.warn('Sound playback not supported:', e);
+            }
+          }
         } else {
           console.log('It is now the opponent\'s turn');
           showMessage('Opponent\'s turn');

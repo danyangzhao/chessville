@@ -336,13 +336,20 @@ const UIManager = (function() {
           // Get crop data from GameConfig
           const cropData = GameConfig.crops[cropType];
           
-          // Ensure the crop data has a type property
-          if (cropData) {
-            cropData.type = cropType;
-          }
+          // Create a proper crop data object with all required properties
+          const cropDataForPlanting = {
+            type: cropType,
+            cost: cropData.cost,
+            growthTime: cropData.turnsTillHarvest,
+            yield: cropData.yield,
+            name: cropData.name,
+            emoji: cropData.emoji
+          };
+          
+          console.log('Prepared crop data for planting:', cropDataForPlanting);
           
           // Plant the crop
-          FarmManager.plantCrop(playerColor, plotIndex, cropData);
+          FarmManager.plantCrop(playerColor, plotIndex, cropDataForPlanting);
         } else {
           showMessage(`Not enough wheat to plant ${cropType}!`);
         }

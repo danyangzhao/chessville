@@ -259,10 +259,10 @@ const FarmManager = (function() {
     }
     
     // Check if player has enough resources
-    const seedCost = cropData.seedCost || 1;
-    if (!GameState.updateSeeds(playerColor, -seedCost)) {
-      console.error(`Not enough seeds to plant crop (required: ${seedCost})`);
-      showMessage(`Not enough seeds to plant crop (required: ${seedCost})`);
+    const seedCost = cropData.cost || 1;
+    if (!GameState.updateWheat(playerColor, -seedCost)) {
+      console.error(`Not enough wheat to plant crop (required: ${seedCost})`);
+      showMessage(`Not enough wheat to plant crop (required: ${seedCost})`);
       return false;
     }
     
