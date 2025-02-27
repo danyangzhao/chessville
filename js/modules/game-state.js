@@ -198,7 +198,7 @@ const GameState = (function() {
     console.log(`Turn ended. Current turn: ${currentTurn}`);
     
     // Notify the server about the turn change
-    SocketManager.sendTurnEnd();
+    SocketManager.sendEndTurn();
     
     // Update the UI
     UIManager.updateTurnIndicator();

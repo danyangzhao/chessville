@@ -4,43 +4,59 @@
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Chessville initializing...');
   
-  // Initialize the UI Manager
-  if (!UIManager.initialize()) {
-    console.error('Failed to initialize UI Manager');
-    return;
+  try {
+    // Check if critical modules are loaded
+    if (typeof GameConfig === 'undefined') {
+      console.error('GameConfig module is not loaded. Check script loading order.');
+      return;
+    }
+    
+    if (typeof GameState === 'undefined') {
+      console.error('GameState module is not loaded. Check script loading order.');
+      return;
+    }
+    
+    // Initialize the UI Manager
+    if (!UIManager.initialize()) {
+      console.error('Failed to initialize UI Manager');
+      return;
+    }
+    
+    // Initialize the Game State
+    if (!GameState.initialize()) {
+      console.error('Failed to initialize Game State');
+      return;
+    }
+    
+    // Initialize the Farm Manager
+    if (!FarmManager.initialize()) {
+      console.error('Failed to initialize Farm Manager');
+      return;
+    }
+    
+    // Initialize the Chess Manager
+    if (!ChessManager.initialize()) {
+      console.error('Failed to initialize Chess Manager');
+      return;
+    }
+    
+    // Initialize the Socket Manager
+    if (!SocketManager.initialize()) {
+      console.error('Failed to initialize Socket Manager');
+      return;
+    }
+    
+    console.log('Chessville initialization complete');
+    
+    // Show the login screen
+    UIManager.showScreen('login-screen');
+    
+    // Display the chess piece movement costs in the UI
+    ChessManager.showMoveCosts();
+    
+  } catch (error) {
+    console.error('Critical initialization error:', error);
   }
-  
-  // Initialize the Game State
-  if (!GameState.initialize()) {
-    console.error('Failed to initialize Game State');
-    return;
-  }
-  
-  // Initialize the Chess Manager
-  if (!ChessManager.initialize()) {
-    console.error('Failed to initialize Chess Manager');
-    return;
-  }
-  
-  // Initialize the Farm Manager
-  if (!FarmManager.initialize()) {
-    console.error('Failed to initialize Farm Manager');
-    return;
-  }
-  
-  // Initialize the Socket Manager
-  if (!SocketManager.initialize()) {
-    console.error('Failed to initialize Socket Manager');
-    return;
-  }
-  
-  console.log('Chessville initialization complete');
-  
-  // Show the login screen
-  UIManager.showScreen('login-screen');
-  
-  // Display the chess piece movement costs in the UI
-  ChessManager.showMoveCosts();
 });
 
 // Global utility function for showing messages

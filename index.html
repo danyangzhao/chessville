@@ -626,11 +626,15 @@
   <!-- Message notification -->
   <div id="message"></div>
   
-  <!-- Game modules -->
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <!-- Game modules - load in correct order -->
+  <script src="js/modules/game-config.js"></script>
   <script src="js/modules/game-state.js"></script>
-  <script src="js/modules/chess-manager.js"></script>
-  <script src="js/modules/farm-manager.js"></script>
   <script src="js/modules/ui-manager.js"></script>
+  <script src="js/modules/farm-manager.js"></script>
+  <script src="js/modules/chess-manager.js"></script>
   <script src="js/modules/socket-manager.js"></script>
   <script src="js/client-core.js"></script>
 </body>

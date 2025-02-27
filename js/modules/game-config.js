@@ -76,7 +76,14 @@ const GameConfig = {
   }
 };
 
-// Export the configuration
+// Make the configuration available globally for browser
+// And also export for Node.js environments
+if (typeof window !== 'undefined') {
+  // Browser environment - make it a global variable
+  window.GameConfig = GameConfig;
+} 
+
+// Export the configuration for Node.js
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = GameConfig;
 } 
