@@ -234,63 +234,63 @@ const FarmManager = (function() {
   
   /**
    * Plant a crop in a plot
-   * @param {string} plotId - The ID of the plot to plant in
-   * @param {string} cropType - The type of crop to plant
+   * @param {string} playerColor - Color of the player
+   * @param {number} plotIndex - Index of the plot
+   * @param {Object} cropData - Data for the crop to plant
+   * @returns {boolean} - Whether the planting was successful
    */
-  function plantCrop(plotId, cropType) {
-    // Check if player can perform a farm action
-    if (!canPerformFarmAction()) {
-      showMessage('You cannot plant now');
-      return;
+  function plantCrop(playerColor, plotIndex, cropData) {
+    console.log(`Planting crop in plot ${plotIndex} for ${playerColor}`);
+    console.log('Crop data:', cropData);
+    
+    if (!isPlayersFarm(playerColor)) {
+      console.error(`Cannot plant crop: Not ${playerColor}'s farm`);
+      return false;
     }
     
-    // Get the plot
-    const plot = getPlotById(plotId);
-    if (!plot) {
-      console.error(`Plot not found: ${plotId}`);
-      return;
+    if (!isPlotAvailable(playerColor, plotIndex)) {
+      console.error(`Cannot plant crop: Plot ${plotIndex} is not available`);
+      return false;
     }
     
-    // Check if the plot is empty
-    if (plot.state !== 'empty') {
-      console.warn(`Plot ${plotId} is not empty`);
-      showMessage('This plot is not available for planting');
-      return;
+    if (!cropData || !cropData.type) {
+      console.error('Cannot plant crop: Invalid crop data');
+      return false;
     }
     
-    // Get the crop data
-    const cropData = GameConfig.crops[cropType];
-    if (!cropData) {
-      console.error(`Crop type not found: ${cropType}`);
-      return;
+    // Check if player has enough resources
+    const seedCost = cropData.seedCost || 1;
+    if (!GameState.updateSeeds(playerColor, -seedCost)) {
+      console.error(`Not enough seeds to plant crop (required: ${seedCost})`);
+      showMessage(`Not enough seeds to plant crop (required: ${seedCost})`);
+      return false;
     }
     
-    // Check if player has enough wheat
-    const playerColor = GameState.getPlayerColor();
-    if (!GameState.updateWheat(playerColor, -cropData.cost)) {
-      showMessage(`Not enough wheat to plant ${cropData.name}`);
-      return;
-    }
+    // Update farm state
+    farms[playerColor].plots[plotIndex] = {
+      state: 'planted',
+      crop: cropData.type,
+      growthStage: 0,
+      maxGrowthStage: cropData.growthTime || 3,
+      timeToHarvest: cropData.growthTime || 3,
+      yield: cropData.yield || 1
+    };
     
-    // Plant the crop
-    plot.state = 'planted';
-    plot.crop = cropData;
-    plot.turnsToHarvest = cropData.turnsTillHarvest;
+    // Update UI
+    displayFarms();
     
-    console.log(`Planted ${cropData.name} in plot ${plotId}`);
-    showMessage(`Planted ${cropData.name} for ${cropData.cost} wheat`);
+    // Notify the server
+    SocketManager.sendPlantCrop(plotIndex, cropData.type);
     
-    // Register the farm action
-    GameState.registerFarmAction();
+    showMessage(`Planted ${cropData.type} in plot ${plotIndex+1}`);
     
-    // Update the farm display
-    updateFarmDisplay();
+    // Auto-skip to chess phase after planting
+    setTimeout(() => {
+      GameState.skipCurrentGamePhase();
+      showMessage('Automatically skipping to chess phase after planting');
+    }, 500); // Small delay for better user experience
     
-    // Send the update to the server
-    SocketManager.sendFarmUpdate('plant', {
-      plotId: plotId,
-      cropType: cropType
-    });
+    return true;
   }
   
   /**

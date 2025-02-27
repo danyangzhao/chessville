@@ -194,6 +194,12 @@ const ChessManager = (function() {
     // Update the move cost display
     showMoveCosts();
     
+    // Auto-end turn after chess move
+    setTimeout(() => {
+      GameState.endTurn();
+      showMessage('Automatically ending turn after chess move');
+    }, 1000); // 1 second delay to allow for visual feedback
+    
     return undefined;
   }
   
