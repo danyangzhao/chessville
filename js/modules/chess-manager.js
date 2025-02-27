@@ -120,11 +120,11 @@ const ChessManager = (function() {
         chessEngine.reset();
       }
       
-      // Get player color based on socket ID
-      const isPlayer1 = SocketManager.getSocketId() === GameState.getPlayer1Id();
-      const orientation = isPlayer1 ? 'white' : 'black';
+      // Get player color directly from GameState
+      const playerColor = GameState.getPlayerColor();
+      const orientation = playerColor === 'white' ? 'white' : 'black';
       
-      debugLog(`Player is ${isPlayer1 ? 'Player 1 (White)' : 'Player 2 (Black)'}`);
+      debugLog(`Player color: ${playerColor}`);
       debugLog(`Board orientation: ${orientation}`);
       
       // Debug chess engine state
@@ -269,18 +269,20 @@ const ChessManager = (function() {
     
     // Check if it's the player's turn
     const pieceColor = piece.charAt(0);
-    const playerColor = SocketManager.getSocketId() === GameState.getPlayer1Id() ? 'w' : 'b';
+    const playerColor = GameState.getPlayerColor();
+    // Convert player color (white/black) to chess piece color (w/b)
+    const chessPieceColor = playerColor === 'white' ? 'w' : 'b';
     
-    debugLog(`Piece color: ${pieceColor}, Player color: ${playerColor}`);
+    debugLog(`Piece color: ${pieceColor}, Player color: ${playerColor}, Chess color: ${chessPieceColor}`);
     
-    if (pieceColor !== playerColor) {
-      debugLog(`Not your piece to move. Piece color: ${pieceColor}, Player color: ${playerColor}`);
+    if (pieceColor !== chessPieceColor) {
+      debugLog(`Not your piece to move. Piece color: ${pieceColor}, Player chess color: ${chessPieceColor}`);
       return 'snapback';
     }
     
     // Verify it's the player's turn
-    if (chessEngine.turn() !== playerColor) {
-      debugLog(`Not your turn. Engine turn: ${chessEngine.turn()}, Player color: ${playerColor}`);
+    if (chessEngine.turn() !== chessPieceColor) {
+      debugLog(`Not your turn. Engine turn: ${chessEngine.turn()}, Player chess color: ${chessPieceColor}`);
       return 'snapback';
     }
     
@@ -521,9 +523,9 @@ const ChessManager = (function() {
         // Update the position on the board
         chessboard.position(currentPosition, false); // false means no animation
         
-        // Get player color based on socket ID
-        const isPlayer1 = SocketManager.getSocketId() === GameState.getPlayer1Id();
-        const orientation = isPlayer1 ? 'white' : 'black';
+        // Get player color directly from GameState
+        const playerColor = GameState.getPlayerColor();
+        const orientation = playerColor === 'white' ? 'white' : 'black';
         
         // If black player, ensure pieces are rotated
         if (orientation === 'black') {
