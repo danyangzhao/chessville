@@ -408,6 +408,59 @@ io.on('connection', (socket) => {
       currentTurn: room.currentTurn
     });
   });
+
+  // Handle end turn requests directly
+  socket.on('end-turn', (data) => {
+    console.log(`Player ${socket.id} requesting end turn in room ${data.roomId}`);
+    
+    // Find the room
+    const room = gameRooms[data.roomId];
+    if (!room) {
+      console.error(`Room ${data.roomId} not found`);
+      return;
+    }
+    
+    // Validate that it's this player's turn
+    const playerColor = room.players[socket.id]?.color;
+    if (!playerColor || playerColor !== room.currentTurn) {
+      console.log(`Player ${socket.id} (${playerColor}) tried to end turn when it's ${room.currentTurn}'s turn`);
+      return;
+    }
+    
+    // Switch turns
+    room.currentTurn = room.currentTurn === 'white' ? 'black' : 'white';
+    console.log(`Turn switched to ${room.currentTurn} in room ${data.roomId}`);
+    
+    // Process farm growth for all players
+    for (const playerKey in room.gameState.farms) {
+      const farm = room.gameState.farms[playerKey];
+      
+      // Process each plot
+      for (let i = 0; i < farm.plots.length; i++) {
+        const plot = farm.plots[i];
+        
+        if (plot.state === 'planted') {
+          // Decrement turns to harvest
+          if (plot.turnsToHarvest > 0) {
+            plot.turnsToHarvest--;
+            
+            // If ready to harvest, update state
+            if (plot.turnsToHarvest === 0) {
+              plot.state = 'ready';
+            }
+          }
+        }
+      }
+    }
+    
+    // Broadcast updated game state to all players in the room
+    io.to(data.roomId).emit('gameStateUpdate', {
+      gameState: room.gameState,
+      currentTurn: room.currentTurn
+    });
+    
+    console.log(`Game state updated and broadcast to room ${data.roomId} after turn change`);
+  });
 });
 
 // Initialize game state
