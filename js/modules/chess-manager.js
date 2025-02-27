@@ -1,181 +1,299 @@
-// Chess board management module
-
-const ChessManager = (() => {
+/**
+ * Chess Manager Module
+ * Handles all chess-related functionality for the game
+ */
+const ChessManager = (function() {
   // Private variables
-  let board = null;
+  let initialized = false;
+  let chessEngine = null;
+  let chessboard = null;
   
-  // Drag and drop handlers
-  function onDragStart(source, piece, position, orientation) {
-    const playerState = GameState.getPlayerState();
-    const gameState = GameState.getGameState();
-    const chess = GameState.getChess();
-    
-    // Only allow the current player to move their pieces
-    if (!GameState.isPlayerTurn()) {
-      console.log('Not your turn');
-      return false;
+  /**
+   * Initialize the Chess Manager
+   * @returns {boolean} True if initialization was successful
+   */
+  function initialize() {
+    if (initialized) {
+      console.warn('Chess Manager already initialized');
+      return true;
     }
     
-    // Check if the piece belongs to the current player
-    const pieceColor = piece.charAt(0) === 'w' ? 'white' : 'black';
-    if (pieceColor !== playerState.playerColor) {
-      console.log('Not your piece');
+    try {
+      console.log('Initializing Chess Manager');
+      
+      // Initialize chess engine
+      if (typeof Chess === 'undefined') {
+        console.error('Chess.js library not loaded');
+        return false;
+      }
+      
+      chessEngine = new Chess();
+      
+      // Set up the board when the UI is ready
+      setTimeout(setupBoard, 100);
+      
+      console.log('Chess Manager initialized');
+      initialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize Chess Manager:', error);
       return false;
     }
+  }
+  
+  /**
+   * Set up the chessboard
+   */
+  function setupBoard() {
+    const boardElement = document.getElementById('chess-board');
+    if (!boardElement) {
+      console.warn('Chessboard element not found');
+      return;
+    }
     
-    // Make sure chess is initialized
-    if (!chess) {
+    if (!chessEngine) {
       console.error('Chess engine not initialized');
+      return;
+    }
+    
+    // Clear any existing board
+    if (chessboard) {
+      chessboard.clear();
+    }
+    
+    // Configure the board
+    const config = {
+      draggable: true,
+      position: chessEngine.fen(),
+      pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+      onDragStart: onDragStart,
+      onDrop: onDrop,
+      onSnapEnd: onSnapEnd
+    };
+    
+    // Create the chessboard
+    chessboard = Chessboard(boardElement.id, config);
+    
+    // Flip the board if the player is black
+    if (GameState.getPlayerColor() === 'black') {
+      boardElement.style.transform = 'rotate(180deg)';
+      
+      // Flip all pieces
+      const pieces = boardElement.querySelectorAll('.piece-417db');
+      pieces.forEach(piece => {
+        piece.style.transform = 'rotate(180deg)';
+      });
+    }
+    
+    // Update the move costs display
+    showMoveCosts();
+    
+    console.log('Chessboard set up');
+  }
+  
+  /**
+   * Handle the start of a piece drag
+   * @param {string} source - The source square
+   * @param {string} piece - The piece being dragged
+   * @param {Object} position - The current board position
+   * @param {string} orientation - The board orientation
+   * @returns {boolean} Whether the drag is allowed
+   */
+  function onDragStart(source, piece, position, orientation) {
+    // Do not allow dragging if the game is over
+    if (chessEngine.game_over()) {
       return false;
     }
     
-    // Check if the piece can move
-    const moves = chess.moves({ square: source, verbose: true });
-    if (moves.length === 0) {
-      console.log('No legal moves for this piece');
+    // Only allow the current player to move pieces
+    if (!GameState.isPlayerTurn()) {
       return false;
     }
     
-    // Store selected piece
-    playerState.selectedPiece = source;
+    // Only allow dragging in the chess phase
+    if (GameState.getCurrentGamePhase() !== 'chess') {
+      showMessage('You can only move pieces during the chess phase');
+      return false;
+    }
+    
+    // Only allow dragging pieces of the player's color
+    const playerColor = GameState.getPlayerColor();
+    if ((playerColor === 'white' && piece.search(/^b/) !== -1) ||
+        (playerColor === 'black' && piece.search(/^w/) !== -1)) {
+      return false;
+    }
+    
     return true;
   }
   
+  /**
+   * Handle a piece being dropped on the board
+   * @param {string} source - The source square
+   * @param {string} target - The target square
+   * @returns {string} 'snapback' to cancel the move, or undefined to allow it
+   */
   function onDrop(source, target) {
-    const chess = GameState.getChess();
-    
-    // Don't allow drops on invalid squares
-    if (!chess) {
-      console.error('Chess engine not initialized');
+    // Do not allow moves if not in chess phase
+    if (GameState.getCurrentGamePhase() !== 'chess') {
+      showMessage('You can only move pieces during the chess phase');
       return 'snapback';
     }
     
-    // See if the move is legal
-    try {
-      const move = chess.move({
-        from: source,
-        to: target,
-        promotion: 'q' // Always promote to queen for simplicity
-      });
-      
-      // If the move is illegal, return 'snapback'
-      if (move === null) {
-        return 'snapback';
-      }
-      
-      // Valid move
-      console.log(`Move made: ${source} to ${target}`);
-      
-      // Update game state
-      GameState.getGameState().chessEngineState = chess.fen();
-      
-      // Send move to server
-      SocketManager.sendMove(source, target);
-      
-      // Check for checkmate
-      if (chess.in_checkmate()) {
-        console.log('Checkmate!');
-        showMessage('Checkmate!', 5000);
-      }
-    } catch (error) {
-      console.error('Error making move:', error);
+    // Check if it's a valid move
+    const move = chessEngine.move({
+      from: source,
+      to: target,
+      promotion: 'q' // Always promote to queen for simplicity
+    });
+    
+    // Invalid move
+    if (move === null) {
       return 'snapback';
     }
+    
+    // Get the piece type
+    const pieceType = move.piece;
+    
+    // Calculate the move cost
+    const moveCost = GameConfig.pieceCosts[pieceType] || 0;
+    
+    // Check if player has enough wheat
+    const playerColor = GameState.getPlayerColor();
+    if (!GameState.updateWheat(playerColor, -moveCost)) {
+      // Undo the move
+      chessEngine.undo();
+      showMessage(`Not enough wheat to move this piece (cost: ${moveCost})`);
+      return 'snapback';
+    }
+    
+    // Check if a piece was captured
+    if (move.captured) {
+      console.log(`Captured a ${move.captured} piece!`);
+      GameState.recordCapture(playerColor);
+      showMessage(`Captured ${getPieceName(move.captured)}!`);
+    }
+    
+    // Update the server
+    SocketManager.sendChessMove(move);
+    
+    // Check for checkmate
+    if (chessEngine.in_checkmate()) {
+      GameState.declareWinner(playerColor, 'checkmate');
+      showMessage('Checkmate!');
+    } else if (chessEngine.in_check()) {
+      showMessage('Check!');
+    }
+    
+    // Update the move cost display
+    showMoveCosts();
+    
+    return undefined;
   }
   
+  /**
+   * Handle the end of a piece move
+   */
   function onSnapEnd() {
-    // Update the board to the current position
-    if (board) {
-      const chess = GameState.getChess();
-      if (chess) {
-        board.position(chess.fen());
-      }
+    // Update the board position
+    if (chessboard) {
+      chessboard.position(chessEngine.fen());
     }
   }
   
-  // Public methods
-  return {
-    initialize() {
-      console.log('Initializing chess manager');
-      
-      // Make sure chessboard.js is loaded
-      if (typeof Chessboard === 'undefined') {
-        console.error('Chessboard.js not loaded');
-        return false;
-      }
-      
-      return true;
-    },
-    
-    setupBoard() {
-      console.log('Setting up chess board');
-      
-      try {
-        // First check if chessboard element exists
-        const boardElement = document.getElementById('chess-board');
-        if (!boardElement) {
-          console.error('Chess board element not found');
-          return false;
-        }
-        
-        // Check if chess engine is available
-        const chess = GameState.getChess();
-        if (!chess) {
-          console.error('Chess engine not initialized');
-          return false;
-        }
-        
-        // Clear any existing board configuration
-        if (board) {
-          console.log('Clearing existing board');
-          board.clear();
-        }
-        
-        // Create chess board
-        const config = {
-          draggable: true,
-          position: chess.fen(),
-          onDragStart: onDragStart,
-          onDrop: onDrop,
-          onSnapEnd: onSnapEnd,
-          pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-        };
-        
-        console.log('Creating board with config:', config);
-        board = Chessboard('chess-board', config);
-        
-        // Update the turn indicator
-        UIManager.updateTurnIndicator();
-        
-        console.log('Chess board setup complete');
-        
-        // Make sure the board is visible
-        boardElement.style.display = 'block';
-        
-        return true;
-      } catch (error) {
-        console.error('Error in setupBoard:', error);
-        showMessage('Error setting up board: ' + error.message, 3000);
-        return false;
-      }
-    },
-    
-    refreshBoard() {
-      const chess = GameState.getChess();
-      
-      if (chess && board) {
-        board.position(chess.fen());
-        console.log('Chess board refreshed with position:', chess.fen());
-        return true;
-      } else if (!board) {
-        return this.setupBoard();
-      }
-      
-      return false;
-    },
-    
-    getBoard() {
-      return board;
+  /**
+   * Update the chessboard display
+   */
+  function updateBoard() {
+    if (chessboard && chessEngine) {
+      chessboard.position(chessEngine.fen());
     }
+  }
+  
+  /**
+   * Process a chess move from the server
+   * @param {Object} move - The move object
+   */
+  function processChessMove(move) {
+    if (!chessEngine) {
+      console.error('Chess engine not initialized');
+      return;
+    }
+    
+    // Make the move
+    const result = chessEngine.move(move);
+    if (result === null) {
+      console.error('Invalid move received from server:', move);
+      return;
+    }
+    
+    console.log('Processed move from server:', move);
+    
+    // Update the board
+    updateBoard();
+    
+    // Check for checkmate
+    if (chessEngine.in_checkmate()) {
+      const winner = chessEngine.turn() === 'w' ? 'black' : 'white';
+      GameState.declareWinner(winner, 'checkmate');
+      showMessage('Checkmate!');
+    } else if (chessEngine.in_check()) {
+      showMessage('Check!');
+    }
+  }
+  
+  /**
+   * Get a human-readable name for a piece
+   * @param {string} pieceCode - The piece code (p, n, b, r, q, k)
+   * @returns {string} The human-readable piece name
+   */
+  function getPieceName(pieceCode) {
+    const pieceNames = {
+      p: 'Pawn',
+      n: 'Knight',
+      b: 'Bishop',
+      r: 'Rook',
+      q: 'Queen',
+      k: 'King'
+    };
+    
+    return pieceNames[pieceCode.toLowerCase()] || 'Unknown Piece';
+  }
+  
+  /**
+   * Display the movement costs for all pieces
+   */
+  function showMoveCosts() {
+    const moveCostsElement = document.getElementById('move-costs-display');
+    if (!moveCostsElement) {
+      console.warn('Move costs display element not found');
+      return;
+    }
+    
+    let html = `
+      <div class="move-costs-info">
+        <h4>Movement Costs (Wheat)</h4>
+        <ul>
+    `;
+    
+    // Add each piece cost
+    Object.entries(GameConfig.pieceCosts).forEach(([piece, cost]) => {
+      html += `<li>${getPieceName(piece)}: ${cost}</li>`;
+    });
+    
+    html += `
+        </ul>
+      </div>
+    `;
+    
+    moveCostsElement.innerHTML = html;
+  }
+  
+  // Public API
+  return {
+    initialize,
+    setupBoard,
+    updateBoard,
+    processChessMove,
+    showMoveCosts
   };
 })(); 

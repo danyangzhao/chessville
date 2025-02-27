@@ -1,184 +1,397 @@
-// Game state management module
-
-const GameState = (() => {
-  // Private variables
-  let gameState = {};
-  let chess = null;
+/**
+ * Game State Module
+ * Manages the overall state of the game including players, turns, and resources
+ */
+const GameState = (function() {
+  // Private state variables
+  let initialized = false;
+  let gameActive = false;
+  let roomId = null;
+  let playerColor = null;
+  let opponentConnected = false;
   let currentTurn = 'white';
+  let currentGamePhase = 'farming'; // 'farming' or 'chess'
+  let gamePhaseCompleted = {
+    farming: false,
+    chess: false
+  };
+  let farmActionTaken = false;
   
-  // Default crop data
-  const defaultCropData = {
-    corn: {
-      cost: 10,
-      yield: 3,
-      growthTime: 3,
-      growthStages: ['seedling', 'growing', 'mature']
+  // Player resources
+  let resources = {
+    white: {
+      wheat: GameConfig.startingWheat,
+      capturedPieces: 0
     },
-    wheat: {
-      cost: 20,
-      yield: 7,
-      growthTime: 5,
-      growthStages: ['seedling', 'growing', 'mature']
-    },
-    carrot: {
-      cost: 30,
-      yield: 12,
-      growthTime: 7,
-      growthStages: ['seedling', 'growing', 'mature']
+    black: {
+      wheat: GameConfig.startingWheat,
+      capturedPieces: 0
     }
   };
   
-  // Player state
-  const playerState = {
-    playerId: null,
-    playerColor: null,
-    roomId: null,
-    isMyTurn: false,
-    selectedPiece: null,
-    selectedPlot: null,
-    selectedPlantType: 'corn'
-  };
+  // Game winner 
+  let winner = null;
   
-  // Public methods
+  /**
+   * Initialize the game state
+   * @returns {boolean} True if initialization was successful
+   */
+  function initialize() {
+    if (initialized) {
+      console.warn('Game State already initialized');
+      return true;
+    }
+    
+    try {
+      console.log('Game State initialized');
+      initialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize Game State:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Reset the game state to its initial values
+   */
+  function resetGame() {
+    gameActive = false;
+    opponentConnected = false;
+    currentTurn = 'white';
+    currentGamePhase = 'farming';
+    gamePhaseCompleted = {
+      farming: false,
+      chess: false
+    };
+    farmActionTaken = false;
+    resources = {
+      white: {
+        wheat: GameConfig.startingWheat,
+        capturedPieces: 0
+      },
+      black: {
+        wheat: GameConfig.startingWheat,
+        capturedPieces: 0
+      }
+    };
+    winner = null;
+  }
+  
+  /**
+   * Set up a new game
+   * @param {string} roomIdParam - The room ID for the game
+   * @param {string} colorParam - The player's color ('white' or 'black')
+   */
+  function setupGame(roomIdParam, colorParam) {
+    roomId = roomIdParam;
+    playerColor = colorParam;
+    resetGame();
+    console.log(`Game setup complete. Room: ${roomId}, Player color: ${playerColor}`);
+  }
+  
+  /**
+   * Start the game
+   */
+  function startGame() {
+    if (!roomId || !playerColor) {
+      console.error('Cannot start game without room ID and player color');
+      return false;
+    }
+    
+    gameActive = true;
+    opponentConnected = true;
+    console.log('Game started');
+    return true;
+  }
+  
+  /**
+   * Check if it's the player's turn
+   * @returns {boolean} True if it's the player's turn
+   */
+  function isPlayerTurn() {
+    return gameActive && currentTurn === playerColor;
+  }
+  
+  /**
+   * Get the current game phase
+   * @returns {string} The current game phase ('farming' or 'chess')
+   */
+  function getCurrentGamePhase() {
+    return currentGamePhase;
+  }
+  
+  /**
+   * Set the current game phase
+   * @param {string} phase - The new game phase ('farming' or 'chess')
+   */
+  function setCurrentGamePhase(phase) {
+    if (phase !== 'farming' && phase !== 'chess') {
+      console.error(`Invalid game phase: ${phase}`);
+      return;
+    }
+    
+    currentGamePhase = phase;
+    
+    // Reset the completed status for the new phase
+    gamePhaseCompleted[phase] = false;
+    
+    // If switching to farming phase, reset the farm action flag
+    if (phase === 'farming') {
+      farmActionTaken = false;
+    }
+    
+    console.log(`Game phase changed to: ${phase}`);
+    
+    // Update the UI to reflect the new phase
+    UIManager.updateGamePhaseIndicator();
+  }
+  
+  /**
+   * Mark the current game phase as completed
+   */
+  function completeCurrentGamePhase() {
+    gamePhaseCompleted[currentGamePhase] = true;
+    console.log(`${currentGamePhase} phase completed`);
+    
+    // If both phases are completed, end the turn
+    if (gamePhaseCompleted.farming && gamePhaseCompleted.chess) {
+      endTurn();
+    } else if (currentGamePhase === 'farming') {
+      // Move to chess phase
+      setCurrentGamePhase('chess');
+    }
+  }
+  
+  /**
+   * Skip the current game phase
+   */
+  function skipCurrentGamePhase() {
+    if (currentGamePhase === 'farming') {
+      completeCurrentGamePhase();
+      console.log('Farming phase skipped');
+    }
+  }
+  
+  /**
+   * End the current turn and switch to the next player
+   */
+  function endTurn() {
+    // If it's not player's turn, do nothing
+    if (!isPlayerTurn()) {
+      console.warn('Cannot end turn - not your turn');
+      return;
+    }
+    
+    // Reset phase completion status
+    gamePhaseCompleted = {
+      farming: false,
+      chess: false
+    };
+    
+    // Switch turns
+    currentTurn = currentTurn === 'white' ? 'black' : 'white';
+    
+    // Reset to farming phase for next turn
+    setCurrentGamePhase('farming');
+    
+    console.log(`Turn ended. Current turn: ${currentTurn}`);
+    
+    // Notify the server about the turn change
+    SocketManager.sendTurnEnd();
+    
+    // Update the UI
+    UIManager.updateTurnIndicator();
+  }
+  
+  /**
+   * Process the turn change from the server
+   */
+  function processTurnChange() {
+    // Reset phase completion status
+    gamePhaseCompleted = {
+      farming: false,
+      chess: false
+    };
+    
+    // Reset to farming phase
+    setCurrentGamePhase('farming');
+    
+    console.log(`Turn changed. Current turn: ${currentTurn}`);
+    
+    // Update the UI
+    UIManager.updateTurnIndicator();
+  }
+  
+  /**
+   * Handle farm action taken by the player
+   */
+  function registerFarmAction() {
+    if (!isPlayerTurn() || currentGamePhase !== 'farming') {
+      console.warn('Cannot perform farm action - not in farming phase or not your turn');
+      return false;
+    }
+    
+    if (farmActionTaken) {
+      console.warn('Farm action already taken this turn');
+      return false;
+    }
+    
+    farmActionTaken = true;
+    return true;
+  }
+  
+  /**
+   * Check if a farm action has been taken this turn
+   * @returns {boolean} True if a farm action has been taken
+   */
+  function hasFarmActionBeenTaken() {
+    return farmActionTaken;
+  }
+  
+  /**
+   * Update player wheat resources
+   * @param {string} color - The player color ('white' or 'black')
+   * @param {number} amount - The amount to add (positive) or subtract (negative)
+   * @returns {boolean} True if the update was successful
+   */
+  function updateWheat(color, amount) {
+    if (!resources[color]) {
+      console.error(`Invalid player color: ${color}`);
+      return false;
+    }
+    
+    // Check if player has enough wheat for deduction
+    if (amount < 0 && resources[color].wheat + amount < 0) {
+      console.warn(`${color} player does not have enough wheat`);
+      return false;
+    }
+    
+    resources[color].wheat += amount;
+    console.log(`${color} player wheat updated: ${resources[color].wheat} (${amount > 0 ? '+' : ''}${amount})`);
+    
+    // Update UI
+    UIManager.updateResourceDisplay();
+    
+    // Check for economic victory
+    checkEconomicVictory();
+    
+    return true;
+  }
+  
+  /**
+   * Get the current wheat amount for a player
+   * @param {string} color - The player color ('white' or 'black')
+   * @returns {number} The wheat amount
+   */
+  function getWheat(color) {
+    if (!resources[color]) {
+      console.error(`Invalid player color: ${color}`);
+      return 0;
+    }
+    
+    return resources[color].wheat;
+  }
+  
+  /**
+   * Record a piece capture
+   * @param {string} color - The player color who made the capture ('white' or 'black')
+   */
+  function recordCapture(color) {
+    if (!resources[color]) {
+      console.error(`Invalid player color: ${color}`);
+      return;
+    }
+    
+    resources[color].capturedPieces++;
+    console.log(`${color} player captured a piece. Total captures: ${resources[color].capturedPieces}`);
+    
+    // Update the UI
+    UIManager.updateResourceDisplay();
+    
+    // Check if capturing unlocks a new farm plot
+    FarmManager.checkUnlockPlot(color);
+  }
+  
+  /**
+   * Get the number of pieces captured by a player
+   * @param {string} color - The player color ('white' or 'black')
+   * @returns {number} The number of pieces captured
+   */
+  function getCapturedPieces(color) {
+    if (!resources[color]) {
+      console.error(`Invalid player color: ${color}`);
+      return 0;
+    }
+    
+    return resources[color].capturedPieces;
+  }
+  
+  /**
+   * Check for economic victory (200 wheat)
+   */
+  function checkEconomicVictory() {
+    if (!gameActive) return;
+    
+    // Check if any player has reached the economic victory threshold
+    if (resources.white.wheat >= GameConfig.victoryConditions.economicThreshold) {
+      declareWinner('white', 'economic');
+    } else if (resources.black.wheat >= GameConfig.victoryConditions.economicThreshold) {
+      declareWinner('black', 'economic');
+    }
+  }
+  
+  /**
+   * Declare a winner and end the game
+   * @param {string} winnerColor - The color of the winning player
+   * @param {string} victoryType - The type of victory (checkmate, economic, etc.)
+   */
+  function declareWinner(winnerColor, victoryType) {
+    if (!gameActive) return;
+    
+    gameActive = false;
+    winner = winnerColor;
+    
+    console.log(`Game over! ${winnerColor} wins by ${victoryType}`);
+    
+    // Update UI to show game over
+    UIManager.showGameOver(winnerColor, victoryType);
+    
+    // Notify the server
+    SocketManager.sendGameOver(winnerColor, victoryType);
+  }
+  
+  // Public API
   return {
-    initialize() {
-      console.log('Initializing game state');
-      
-      // Reset game state
-      gameState = {
-        farms: {
-          player1: { corn: 100, plots: [] },
-          player2: { corn: 100, plots: [] }
-        }
-      };
-      
-      // Initialize chess engine if possible
-      if (typeof Chess !== 'undefined') {
-        chess = new Chess();
-        gameState.chessEngineState = chess.fen();
-      }
-    },
+    initialize,
+    resetGame,
+    setupGame,
+    startGame,
+    isPlayerTurn,
+    getCurrentGamePhase,
+    setCurrentGamePhase,
+    completeCurrentGamePhase,
+    skipCurrentGamePhase,
+    endTurn,
+    processTurnChange,
+    registerFarmAction,
+    hasFarmActionBeenTaken,
+    updateWheat,
+    getWheat,
+    recordCapture,
+    getCapturedPieces,
+    declareWinner,
     
-    getPlayerState() {
-      return playerState;
+    // Getters
+    getRoomId: () => roomId,
+    getPlayerColor: () => playerColor,
+    getCurrentTurn: () => currentTurn,
+    isGameActive: () => gameActive,
+    isOpponentConnected: () => opponentConnected,
+    setOpponentConnected: (status) => {
+      opponentConnected = status;
+      if (status) UIManager.updateGameStatus();
     },
-    
-    getGameState() {
-      return gameState;
-    },
-    
-    getChess() {
-      return chess;
-    },
-    
-    getCurrentTurn() {
-      return currentTurn;
-    },
-    
-    getCropData() {
-      return defaultCropData;
-    },
-    
-    setPlayerColor(color) {
-      playerState.playerColor = color;
-      console.log(`Player color set to: ${color}`);
-    },
-    
-    setRoomId(roomId) {
-      playerState.roomId = roomId;
-      console.log(`Room ID set to: ${roomId}`);
-    },
-    
-    setPlayerId(id) {
-      playerState.playerId = id;
-      console.log(`Player ID set to: ${id}`);
-    },
-    
-    updateGameState(newState, turn) {
-      if (newState) {
-        gameState = newState;
-      }
-      
-      if (turn) {
-        currentTurn = turn;
-        playerState.isMyTurn = playerState.playerColor === turn;
-      }
-      
-      console.log(`Game state updated. Current turn: ${currentTurn}`);
-      console.log(`Is my turn: ${playerState.isMyTurn}`);
-      
-      return gameState;
-    },
-    
-    updateChessEngine(fen) {
-      try {
-        if (typeof Chess === 'undefined') {
-          console.error('Chess library not loaded');
-          return false;
-        }
-        
-        if (fen && fen !== '8/8/8/8/8/8/8/8 w - - 0 1') {
-          chess = new Chess(fen);
-          gameState.chessEngineState = fen;
-          return true;
-        } else {
-          chess = new Chess();
-          gameState.chessEngineState = chess.fen();
-          return true;
-        }
-      } catch (error) {
-        console.error('Error updating chess engine:', error);
-        return false;
-      }
-    },
-    
-    makeMove(from, to) {
-      if (!chess) return false;
-      
-      try {
-        const move = chess.move({
-          from: from,
-          to: to,
-          promotion: 'q' // Always promote to queen for simplicity
-        });
-        
-        if (move) {
-          gameState.chessEngineState = chess.fen();
-          return true;
-        }
-        return false;
-      } catch (error) {
-        console.error('Error making move:', error);
-        return false;
-      }
-    },
-    
-    isCheckmate() {
-      return chess ? chess.in_checkmate() : false;
-    },
-    
-    isPlayerTurn() {
-      return playerState.isMyTurn;
-    },
-    
-    getPlayerFarmKey() {
-      return playerState.playerColor === 'white' ? 'player1' : 'player2';
-    },
-    
-    getOpponentFarmKey() {
-      return playerState.playerColor === 'white' ? 'player2' : 'player1';
-    },
-    
-    restoreConfigurations() {
-      // Ensure properties are restored for each crop type
-      if (gameState.crops) {
-        Object.entries(gameState.crops).forEach(([cropName, crop]) => {
-          if (!crop.growthStages && defaultCropData[cropName] && defaultCropData[cropName].growthStages) {
-            console.log(`Restoring missing property growthStages for ${cropName}`);
-            crop.growthStages = defaultCropData[cropName].growthStages;
-          }
-        });
-      }
-    }
+    getWinner: () => winner
   };
 })(); 

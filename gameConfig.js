@@ -3,7 +3,7 @@
 
 const gameConfig = {
   // Starting resources
-  startingCorn: 100,
+  startingWheat: 25,
   
   // Chess piece move costs
   moveCosts: {
@@ -22,17 +22,17 @@ const gameConfig = {
     
     // Plant types
     plants: {
-      corn: { 
-        seedCost: 3,
-        harvestYield: 10,
-        growthTime: 3,
-        emoji: "🌽" 
-      },
       wheat: { 
         seedCost: 2,
         harvestYield: 6,
         growthTime: 2,
         emoji: "🌾" 
+      },
+      corn: { 
+        seedCost: 3,
+        harvestYield: 10,
+        growthTime: 3,
+        emoji: "🌽" 
       },
       carrot: { 
         seedCost: 4,
@@ -48,17 +48,21 @@ const gameConfig = {
       }
     },
     
-    // Plot unlocking costs
-    unlockCost: 5,
-    captureScaling: 3,
+    // Farm plot configuration
+    totalFarmPlots: 6,
+    startingUnlockedPlots: 2,
+    
+    // Capture requirements for unlocking plots
+    captureRequirements: [
+      { plot: 2, capturesNeeded: 1 },  // Third plot (index 2) requires 1 capture
+      { plot: 3, capturesNeeded: 3 },  // Fourth plot (index 3) requires 3 captures
+      { plot: 4, capturesNeeded: 6 },  // Fifth plot (index 4) requires 6 captures
+      { plot: 5, capturesNeeded: 10 }  // Sixth plot (index 5) requires 10 captures
+    ]
   },
   
   // Victory conditions
-  cornVictoryAmount: 200,
-  
-  // Starting plots configuration
-  startingUnlockedPlots: 2,
-  startingUnlockablePlots: 3,
+  wheatVictoryAmount: 200,
   
   // Game progression
   turnsPerGrowthStage: 1,

@@ -1,410 +1,301 @@
-// Socket connection and event handling module
-
-const SocketManager = (() => {
+/**
+ * Socket Manager Module
+ * Handles all socket communication with the server
+ */
+const SocketManager = (function() {
   // Private variables
+  let initialized = false;
   let socket = null;
-  let connectionAttempts = 0;
-  let connected = false;
+  let roomId = null;
   
-  // Game start event handler
-  function handleGameStart(data) {
-    console.log('Game start event received:', JSON.stringify(data));
-    
-    // Show a message to the user immediately
-    showMessage('Game starting!', 3000);
+  /**
+   * Initialize the Socket Manager
+   * @returns {boolean} True if initialization was successful
+   */
+  function initialize() {
+    if (initialized) {
+      console.warn('Socket Manager already initialized');
+      return true;
+    }
     
     try {
-      // Basic validation of the data
-      if (!data) {
-        console.error('Received empty data in gameStart event');
-        showMessage('Error: Invalid game data received', 5000);
-        return;
+      console.log('Initializing Socket Manager');
+      
+      // Initialize socket connection
+      if (typeof io === 'undefined') {
+        console.error('Socket.io library not loaded');
+        return false;
       }
       
-      // Initialize or update the gameState
-      const newGameState = data.gameState || {
-        farms: {
-          player1: { corn: 100, plots: [] },
-          player2: { corn: 100, plots: [] }
-        }
-      };
-      
-      // Update game state
-      GameState.updateGameState(newGameState, data.currentTurn);
-      
-      // Store the player color if provided
-      if (data.playerColor) {
-        GameState.setPlayerColor(data.playerColor);
-      }
-      
-      // Show the game screen
-      UIManager.showScreen('game-screen');
-      
-      // Initialize the chess engine with the FEN from server
-      if (newGameState.chessEngineState) {
-        GameState.updateChessEngine(newGameState.chessEngineState);
-      }
-      
-      // Delayed setup to ensure DOM is ready
-      setTimeout(() => {
-        // Set up the chess board
-        ChessManager.setupBoard();
-        
-        // Initialize farms
-        FarmManager.initializeFarms();
-        FarmManager.updateCornCounts();
-        
-        // Update turn indicator
-        UIManager.updateTurnIndicator();
-        
-        console.log('Game initialization complete');
-      }, 500);
-    } catch (error) {
-      console.error('Critical error in gameStart handler:', error);
-      showMessage('Error starting game: ' + error.message, 5000);
-      
-      // Try a basic recovery - at least show the game screen
-      UIManager.showScreen('game-screen');
-    }
-  }
-  
-  // Game state update event handler
-  function handleGameStateUpdate(data) {
-    try {
-      console.log('Game state update received:', JSON.stringify(data));
-      
-      // Save the previous chess state for comparison
-      const prevGameState = GameState.getGameState();
-      const prevChessState = prevGameState.chessEngineState;
-      
-      // Update the game state and turn
-      GameState.updateGameState(data.gameState, data.currentTurn);
-      
-      // Make sure we restore properties for crops
-      GameState.restoreConfigurations();
-      
-      // Update chess engine if we have a valid state
-      const newChessState = data.gameState?.chessEngineState;
-      if (newChessState && newChessState !== '8/8/8/8/8/8/8/8 w - - 0 1') {
-        try {
-          GameState.updateChessEngine(newChessState);
-        } catch (error) {
-          console.error('Error setting chess FEN:', error);
-          // If there's an error, try with the previous state or default
-          if (prevChessState && prevChessState !== '8/8/8/8/8/8/8/8 w - - 0 1') {
-            GameState.updateChessEngine(prevChessState);
-          } else {
-            GameState.updateChessEngine(null); // Initialize with default position
-          }
-        }
-      } else {
-        console.warn('Received empty or invalid board FEN. Using default position.');
-        GameState.updateChessEngine(null); // Initialize with default position
-      }
-      
-      // Update the board and displays
-      ChessManager.refreshBoard();
-      FarmManager.refreshFarms();
-      UIManager.updateTurnIndicator();
-      
-      // Show the game screen if we're not already there
-      UIManager.showScreen('game-screen');
-    } catch (error) {
-      console.error('Error in gameStateUpdate event handler:', error);
-      showMessage('Error updating game: ' + error.message, 3000);
-    }
-  }
-  
-  // Game over event handler
-  function handleGameOver(data) {
-    console.log('Game over:', data);
-    
-    // Show game over message
-    const playerState = GameState.getPlayerState();
-    const isWinner = data.winner === playerState.playerId;
-    const message = isWinner ? 
-      `You won! ${data.reason === 'corn' ? 'You collected 200 corn!' : 'You checkmated your opponent!'}` :
-      `You lost. ${data.reason === 'corn' ? 'Your opponent collected 200 corn.' : 'Your king was checkmated.'}`;
-    
-    UIManager.showVictoryBanner(isWinner, message);
-  }
-  
-  // Public methods
-  return {
-    initialize() {
-      console.log('Initializing socket manager');
-      
-      // Create socket connection
-      socket = this.createSocketConnection();
+      // Connect to the server
+      socket = io();
       
       // Set up event listeners
-      if (socket) {
-        this.setupSocketListeners(socket);
-      }
-    },
-    
-    createSocketConnection() {
-      try {
-        console.log('Creating socket connection');
-        
-        // Check if Socket.IO is available
-        if (typeof io === 'undefined') {
-          console.error('Socket.IO library not loaded');
-          showMessage('Error: Socket.IO not available. Please refresh the page.', 5000);
-          return null;
-        }
-        
-        // Log the current URL for debugging
-        console.log('Current location:', window.location.href);
-        
-        // Create socket connection with explicit URL and options
-        const socketOptions = {
-          reconnection: true,
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-          timeout: 10000
-        };
-        
-        // Use relative URL for connection to handle various deployment environments
-        const connectionUrl = window.location.protocol + '//' + window.location.host;
-        console.log('Connecting to socket server at:', connectionUrl);
-        
-        const newSocket = io(connectionUrl, socketOptions);
-        connectionAttempts = 0;
-        
-        return newSocket;
-      } catch (error) {
-        console.error('Error creating socket connection:', error);
-        showMessage('Error connecting to server. Please refresh the page.', 5000);
-        return null;
-      }
-    },
-    
-    setupSocketListeners(socket) {
-      console.log('Setting up socket event listeners');
+      setupSocketListeners();
       
-      // Connection events
-      socket.on('connect', () => {
-        console.log('Connected to server with socket ID:', socket.id);
-        connected = true;
-        connectionAttempts = 0;
-        
-        // Store the player ID
-        GameState.setPlayerId(socket.id);
-        
-        showMessage('Connected to server', 2000);
-        
-        // If we have a saved room ID, try to rejoin on reconnection
-        const roomId = GameState.getPlayerState().roomId;
-        if (roomId) {
-          console.log(`Attempting to rejoin room ${roomId} after reconnect`);
-          socket.emit('joinGame', { roomId: roomId });
-          showMessage(`Reconnecting to game ${roomId}...`, 3000);
-        }
-      });
-      
-      // Handle connection errors
-      socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        connected = false;
-        connectionAttempts++;
-        
-        if (connectionAttempts <= 3) {
-          showMessage(`Connection error: ${error.message}. Retrying...`, 3000);
-        } else {
-          showMessage(`Unable to connect to server after ${connectionAttempts} attempts. Please check your connection.`, 5000);
-        }
-      });
-      
-      // Handle disconnections
-      socket.on('disconnect', (reason) => {
-        console.log('Disconnected from server:', reason);
-        connected = false;
-        
-        if (reason === 'io server disconnect') {
-          // The server has forcefully disconnected the socket
-          showMessage('Disconnected by server. Attempting to reconnect...', 3000);
-          socket.connect();
-        } else {
-          // Other disconnection reasons (transport close, etc.)
-          showMessage('Connection lost. Attempting to reconnect...', 3000);
-        }
-      });
-      
-      // Handle reconnection
-      socket.on('reconnect', (attemptNumber) => {
-        console.log(`Reconnected after ${attemptNumber} attempts`);
-        showMessage('Reconnected to server', 2000);
-        
-        // If we were in a game, try to rejoin
-        const roomId = GameState.getPlayerState().roomId;
-        if (roomId) {
-          console.log(`Attempting to rejoin room ${roomId} after reconnect`);
-          socket.emit('joinGame', { roomId: roomId });
-          showMessage(`Reconnecting to game ${roomId}...`, 3000);
-        }
-      });
-      
-      // Game related events
-      
-      // Handle player assignment
-      socket.on('playerAssigned', (data) => {
-        console.log('Player assigned event received:', data);
-        
-        // Store player information
-        GameState.setPlayerColor(data.color);
-        GameState.setRoomId(data.roomId);
-        
-        // Update the UI to show the player's color and room ID
-        UIManager.updateRoomInfo();
-        
-        // Show the waiting screen
-        UIManager.showScreen('waiting-screen');
-        
-        // Set waiting message
-        UIManager.showWaitingMessage(`You've joined room ${data.roomId} as ${data.color}. Waiting for opponent...`);
-        
-        showMessage(`Joined room ${data.roomId} as ${data.color}`, 3000);
-      });
-      
-      // Handle room full notification
-      socket.on('roomFull', (data) => {
-        console.log('Room full event received:', data);
-        
-        // Check if data exists and has roomId property
-        const roomId = data && data.roomId ? data.roomId : 'the requested room';
-        
-        showMessage(`Room ${roomId} is full. Try another room.`, 5000);
-      });
-      
-      // Handle game start
-      socket.on('gameStart', handleGameStart);
-      
-      // Handle game state updates
-      socket.on('gameStateUpdate', handleGameStateUpdate);
-      
-      // Handle game over
-      socket.on('gameOver', handleGameOver);
-      
-      // Handle opponent leaving
-      socket.on('opponentLeft', () => {
-        console.log('Opponent left the game');
-        showMessage('Your opponent has left the game.', 5000);
-      });
-      
-      // Handle configuration updates
-      socket.on('configUpdate', (data) => {
-        console.log('Game configuration update received:', data);
-        
-        // Update the game config with the new values
-        if (data.config) {
-          GameState.getGameState().config = data.config;
-          console.log('Game configuration updated to version:', data.version);
-          
-          // If we're in a game, update the UI to reflect any immediate changes
-          if (GameState.getGameState().farms) {
-            // Refresh farm displays
-            FarmManager.refreshFarms();
-            
-            // Show notification
-            showMessage('Game configuration has been updated!');
-          }
-        }
-      });
-    },
-    
-    joinRoom(roomId) {
-      if (!socket || !connected) {
-        console.error('Cannot join room: socket not connected');
-        showMessage('Not connected to server. Please try again.', 3000);
-        return;
-      }
-      
-      if (!roomId) {
-        console.error('Cannot join room: no room ID provided');
-        showMessage('Please enter a valid room ID', 3000);
-        return;
-      }
-      
-      console.log(`Attempting to join room: ${roomId}`);
-      socket.emit('joinGame', { roomId: roomId });
-      GameState.setRoomId(roomId);
-      
-      showMessage(`Connecting to game ${roomId}...`, 3000);
-    },
-    
-    sendMove(from, to) {
-      if (!socket || !connected) {
-        console.error('Cannot send move: socket not connected');
-        showMessage('Not connected to server', 3000);
-        return;
-      }
-      
-      const playerState = GameState.getPlayerState();
-      const roomId = playerState.roomId;
-      
-      if (!roomId) {
-        console.error('Cannot send move: not in a room');
-        return;
-      }
-      
-      console.log(`Sending move: ${from} to ${to}`);
-      socket.emit('makeMove', {
-        roomId: roomId,
-        from: from,
-        to: to
-      });
-    },
-    
-    sendGameStateUpdate() {
-      if (!socket || !connected) {
-        console.error('Cannot send game state update: socket not connected');
-        return;
-      }
-      
-      const playerState = GameState.getPlayerState();
-      const roomId = playerState.roomId;
-      
-      if (!roomId) {
-        console.error('Cannot send game state update: not in a room');
-        return;
-      }
-      
-      console.log('Sending game state update to server');
-      socket.emit('updateGameState', {
-        roomId: roomId,
-        gameState: GameState.getGameState()
-      });
-    },
-    
-    sendGameOver(reason) {
-      if (!socket || !connected) {
-        console.error('Cannot send game over: socket not connected');
-        return;
-      }
-      
-      const playerState = GameState.getPlayerState();
-      const roomId = playerState.roomId;
-      
-      if (!roomId) {
-        console.error('Cannot send game over: not in a room');
-        return;
-      }
-      
-      console.log(`Sending game over: ${reason}`);
-      socket.emit('gameOver', {
-        roomId: roomId,
-        playerId: playerState.playerId,
-        reason: reason
-      });
-    },
-    
-    isConnected() {
-      return connected;
-    },
-    
-    getSocket() {
-      return socket;
+      console.log('Socket Manager initialized');
+      initialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize Socket Manager:', error);
+      return false;
     }
+  }
+  
+  /**
+   * Set up socket event listeners
+   */
+  function setupSocketListeners() {
+    if (!socket) {
+      console.error('Socket not initialized');
+      return;
+    }
+    
+    // Connection events
+    socket.on('connect', () => {
+      console.log('Connected to server with ID:', socket.id);
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('Disconnected from server');
+    });
+    
+    // Game events
+    socket.on('room-joined', (data) => {
+      console.log('Joined room:', data);
+      roomId = data.roomId;
+      
+      // Initialize the game with the provided data
+      GameState.setupGame(data.roomId, data.playerColor);
+      UIManager.setupGameUI(data.roomId, data.playerColor);
+      
+      if (data.gameInProgress) {
+        // Game is already in progress, update UI accordingly
+        UIManager.updateGameStatus('Game in progress');
+      } else {
+        // Waiting for opponent
+        UIManager.updateGameStatus('Waiting for opponent...');
+      }
+    });
+    
+    socket.on('opponent-joined', (data) => {
+      console.log('Opponent joined:', data);
+      GameState.setOpponentConnected(true);
+      UIManager.updateGameStatus('Opponent joined');
+      UIManager.showScreen('game-screen');
+      
+      // Start the game if both players are ready
+      if (data.startGame) {
+        GameState.startGame();
+        
+        // Update UI based on whether it's the player's turn
+        if (GameState.isPlayerTurn()) {
+          UIManager.updateGamePhaseIndicator('farming');
+          showMessage('Your turn! Start with the farming phase');
+        } else {
+          UIManager.updateTurnIndicator();
+          showMessage('Opponent\'s turn');
+        }
+      }
+    });
+    
+    socket.on('opponent-disconnected', () => {
+      console.log('Opponent disconnected');
+      GameState.setOpponentConnected(false);
+      UIManager.updateGameStatus('Opponent disconnected');
+      showMessage('Opponent disconnected');
+    });
+    
+    socket.on('game-started', (data) => {
+      console.log('Game started:', data);
+      GameState.startGame();
+      ChessManager.setupBoard();
+      
+      // Update UI based on whether it's the player's turn
+      if (GameState.isPlayerTurn()) {
+        UIManager.updateGamePhaseIndicator('farming');
+        showMessage('Your turn! Start with the farming phase');
+      } else {
+        UIManager.updateTurnIndicator();
+        showMessage('Opponent\'s turn');
+      }
+    });
+    
+    socket.on('chess-move', (move) => {
+      console.log('Received chess move:', move);
+      ChessManager.processChessMove(move);
+      UIManager.updateTurnIndicator();
+    });
+    
+    socket.on('farm-action', (action) => {
+      console.log('Received farm action:', action);
+      FarmManager.processFarmAction(action);
+      UIManager.updateResourceDisplay();
+    });
+    
+    socket.on('phase-change', (data) => {
+      console.log('Phase changed:', data);
+      GameState.setCurrentGamePhase(data.phase);
+      UIManager.updateGamePhaseIndicator(data.phase);
+      
+      if (GameState.isPlayerTurn()) {
+        if (data.phase === 'farming') {
+          showMessage('Your turn - Farming Phase');
+        } else {
+          showMessage('Chess Phase - Make your move');
+        }
+      }
+    });
+    
+    socket.on('turn-change', (data) => {
+      console.log('Turn changed:', data);
+      GameState.setCurrentTurn(data.color);
+      UIManager.updateTurnIndicator();
+      
+      if (GameState.isPlayerTurn()) {
+        GameState.setCurrentGamePhase('farming');
+        UIManager.updateGamePhaseIndicator('farming');
+        showMessage('Your turn - Farming Phase');
+      } else {
+        showMessage('Opponent\'s turn');
+      }
+    });
+    
+    socket.on('game-over', (data) => {
+      console.log('Game over:', data);
+      UIManager.showGameOver(data.winner, data.reason);
+    });
+    
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+      showMessage('Error: ' + error.message);
+    });
+  }
+  
+  /**
+   * Join a game room
+   * @param {string} username - The player's username
+   * @param {string} roomId - The room ID to join (optional)
+   */
+  function joinRoom(username, roomId = '') {
+    if (!socket) {
+      console.error('Socket not initialized');
+      return;
+    }
+    
+    console.log('Joining room with username:', username, 'roomId:', roomId);
+    
+    socket.emit('join-room', {
+      username: username,
+      roomId: roomId
+    });
+    
+    UIManager.updateGameStatus('Joining game...');
+  }
+  
+  /**
+   * Send a chess move to the server
+   * @param {Object} move - The move object
+   */
+  function sendChessMove(move) {
+    if (!socket || !roomId) {
+      console.error('Socket or room ID not initialized');
+      return;
+    }
+    
+    console.log('Sending chess move:', move);
+    
+    socket.emit('chess-move', {
+      roomId: roomId,
+      move: move
+    });
+    
+    // End turn after making a chess move
+    socket.emit('end-turn', {
+      roomId: roomId
+    });
+  }
+  
+  /**
+   * Send a farm action to the server
+   * @param {string} action - The action type (plant, harvest, unlock)
+   * @param {Object} data - The action data
+   */
+  function sendFarmAction(action, data) {
+    if (!socket || !roomId) {
+      console.error('Socket or room ID not initialized');
+      return;
+    }
+    
+    console.log('Sending farm action:', action, data);
+    
+    socket.emit('farm-action', {
+      roomId: roomId,
+      action: action,
+      data: data
+    });
+  }
+  
+  /**
+   * Send a phase change to the server
+   * @param {string} phase - The new phase (farming or chess)
+   */
+  function sendPhaseChange(phase) {
+    if (!socket || !roomId) {
+      console.error('Socket or room ID not initialized');
+      return;
+    }
+    
+    console.log('Sending phase change:', phase);
+    
+    socket.emit('phase-change', {
+      roomId: roomId,
+      phase: phase
+    });
+  }
+  
+  /**
+   * Send an end turn to the server
+   */
+  function sendEndTurn() {
+    if (!socket || !roomId) {
+      console.error('Socket or room ID not initialized');
+      return;
+    }
+    
+    console.log('Sending end turn');
+    
+    socket.emit('end-turn', {
+      roomId: roomId
+    });
+  }
+  
+  /**
+   * Send a game over notification to the server
+   * @param {string} reason - The reason for game over
+   */
+  function sendGameOver(reason) {
+    if (!socket || !roomId) {
+      console.error('Socket or room ID not initialized');
+      return;
+    }
+    
+    console.log('Sending game over:', reason);
+    
+    socket.emit('game-over', {
+      roomId: roomId,
+      reason: reason
+    });
+  }
+  
+  // Public API
+  return {
+    initialize,
+    joinRoom,
+    sendChessMove,
+    sendFarmAction,
+    sendPhaseChange,
+    sendEndTurn,
+    sendGameOver
   };
 })(); 

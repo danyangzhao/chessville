@@ -1,436 +1,637 @@
-// Farm management module
-
-const FarmManager = (() => {
+/**
+ * Farm Manager Module
+ * Handles all farm-related functionality for the game
+ */
+const FarmManager = (function() {
   // Private variables
+  let initialized = false;
   
-  // Helper function to get player's farm element
-  function getPlayerFarmElement(playerKey) {
-    if (playerKey === 'player1') {
-      return document.getElementById('player1-farm');
-    } else if (playerKey === 'player2') {
-      return document.getElementById('player2-farm');
+  // Farm state
+  const farms = {
+    white: {
+      plots: [],
+      unlockedPlots: GameConfig.farmConfig.startingUnlockedPlots
+    },
+    black: {
+      plots: [],
+      unlockedPlots: GameConfig.farmConfig.startingUnlockedPlots
     }
+  };
+  
+  /**
+   * Initialize the Farm Manager
+   * @returns {boolean} True if initialization was successful
+   */
+  function initialize() {
+    if (initialized) {
+      console.warn('Farm Manager already initialized');
+      return true;
+    }
+    
+    try {
+      console.log('Initializing Farm Manager');
+      
+      // Initialize farms
+      initializeFarmState('white');
+      initializeFarmState('black');
+      
+      console.log('Farm Manager initialized');
+      initialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize Farm Manager:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Initialize the farm state for a player
+   * @param {string} playerColor - The player color ('white' or 'black')
+   */
+  function initializeFarmState(playerColor) {
+    if (!farms[playerColor]) {
+      console.error(`Invalid player color: ${playerColor}`);
+      return;
+    }
+    
+    // Create the farm plots
+    farms[playerColor].plots = [];
+    
+    for (let i = 0; i < GameConfig.farmConfig.totalPlots; i++) {
+      // Determine if the plot is locked or empty
+      const plotState = i < GameConfig.farmConfig.startingUnlockedPlots ? 'empty' : 'locked';
+      
+      farms[playerColor].plots.push({
+        id: `${playerColor}-plot-${i}`,
+        index: i,
+        state: plotState,
+        crop: null,
+        turnsToHarvest: 0,
+        unlockRequirement: i >= GameConfig.farmConfig.startingUnlockedPlots 
+          ? GameConfig.farmConfig.plotUnlockRequirements[i - GameConfig.farmConfig.startingUnlockedPlots] 
+          : 0
+      });
+    }
+    
+    console.log(`Farm state initialized for ${playerColor} player`);
+  }
+  
+  /**
+   * Initialize the farm display in the UI
+   */
+  function initializeFarmDisplay() {
+    const player1FarmElement = document.getElementById('player1-farm');
+    const player2FarmElement = document.getElementById('player2-farm');
+    
+    if (!player1FarmElement || !player2FarmElement) {
+      console.error('Farm elements not found');
+      return;
+    }
+    
+    // Clear the farm displays
+    player1FarmElement.innerHTML = '';
+    player2FarmElement.innerHTML = '';
+    
+    // Create the farm plots for white player
+    farms.white.plots.forEach(plot => {
+      const plotElement = createPlotElement(plot);
+      player1FarmElement.appendChild(plotElement);
+    });
+    
+    // Create the farm plots for black player
+    farms.black.plots.forEach(plot => {
+      const plotElement = createPlotElement(plot);
+      player2FarmElement.appendChild(plotElement);
+    });
+    
+    // Add event listeners to the plots
+    addPlotEventListeners();
+    
+    console.log('Farm display initialized');
+  }
+  
+  /**
+   * Create a farm plot element
+   * @param {Object} plot - The plot data
+   * @returns {HTMLElement} The created plot element
+   */
+  function createPlotElement(plot) {
+    const plotElement = document.createElement('div');
+    plotElement.id = plot.id;
+    plotElement.className = `farm-plot ${plot.state}`;
+    plotElement.setAttribute('data-plot-index', plot.index);
+    
+    // Add content based on the plot state
+    if (plot.state === 'locked') {
+      // Locked plot
+      plotElement.innerHTML = `
+        <div class="locked-info">Locked</div>
+        <div class="locked-info">Need ${plot.unlockRequirement} captures</div>
+      `;
+    } else if (plot.state === 'unlockable') {
+      // Unlockable plot
+      plotElement.innerHTML = `
+        <button class="unlock-plot-button" data-plot-id="${plot.id}">Unlock</button>
+      `;
+    } else if (plot.state === 'planted') {
+      // Planted plot with crop
+      const growthClass = getGrowthClass(plot.turnsToHarvest, plot.crop.turnsTillHarvest);
+      plotElement.innerHTML = `
+        <div class="plant ${growthClass}">${plot.crop.emoji}</div>
+        <div class="growth-info">${plot.turnsToHarvest} turns</div>
+      `;
+    } else if (plot.state === 'ready') {
+      // Ready to harvest
+      plotElement.innerHTML = `
+        <div class="plant mature">${plot.crop.emoji}</div>
+        <button class="harvest-button" data-plot-id="${plot.id}">Harvest</button>
+      `;
+    } else {
+      // Empty plot
+      plotElement.innerHTML = `
+        <button class="plant-button" data-plot-id="${plot.id}">Plant</button>
+      `;
+    }
+    
+    return plotElement;
+  }
+  
+  /**
+   * Add event listeners to the farm plots
+   */
+  function addPlotEventListeners() {
+    // Plant buttons
+    const plantButtons = document.querySelectorAll('.plant-button');
+    plantButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const plotId = this.getAttribute('data-plot-id');
+        if (canPerformFarmAction()) {
+          UIManager.showPlantSelector(plotId);
+        } else {
+          showMessage('You cannot plant now');
+        }
+      });
+    });
+    
+    // Harvest buttons
+    const harvestButtons = document.querySelectorAll('.harvest-button');
+    harvestButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const plotId = this.getAttribute('data-plot-id');
+        if (canPerformFarmAction()) {
+          harvestCrop(plotId);
+        } else {
+          showMessage('You cannot harvest now');
+        }
+      });
+    });
+    
+    // Unlock plot buttons
+    const unlockButtons = document.querySelectorAll('.unlock-plot-button');
+    unlockButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const plotId = this.getAttribute('data-plot-id');
+        if (canPerformFarmAction()) {
+          unlockPlot(plotId);
+        } else {
+          showMessage('You cannot unlock plots now');
+        }
+      });
+    });
+  }
+  
+  /**
+   * Check if the player can perform a farm action
+   * @returns {boolean} True if the player can perform a farm action
+   */
+  function canPerformFarmAction() {
+    return GameState.isPlayerTurn() && 
+           GameState.getCurrentGamePhase() === 'farming' && 
+           !GameState.hasFarmActionBeenTaken();
+  }
+  
+  /**
+   * Get the growth class based on turns to harvest
+   * @param {number} turnsToHarvest - The turns to harvest
+   * @param {number} totalTurns - The total turns for growth
+   * @returns {string} The growth class
+   */
+  function getGrowthClass(turnsToHarvest, totalTurns) {
+    if (turnsToHarvest <= 0) {
+      return 'mature';
+    }
+    
+    const growthProgress = (totalTurns - turnsToHarvest) / totalTurns;
+    
+    if (growthProgress < 0.33) {
+      return 'seedling';
+    } else if (growthProgress < 0.66) {
+      return 'growing';
+    } else {
+      return 'mature';
+    }
+  }
+  
+  /**
+   * Plant a crop in a plot
+   * @param {string} plotId - The ID of the plot to plant in
+   * @param {string} cropType - The type of crop to plant
+   */
+  function plantCrop(plotId, cropType) {
+    // Check if player can perform a farm action
+    if (!canPerformFarmAction()) {
+      showMessage('You cannot plant now');
+      return;
+    }
+    
+    // Get the plot
+    const plot = getPlotById(plotId);
+    if (!plot) {
+      console.error(`Plot not found: ${plotId}`);
+      return;
+    }
+    
+    // Check if the plot is empty
+    if (plot.state !== 'empty') {
+      console.warn(`Plot ${plotId} is not empty`);
+      showMessage('This plot is not available for planting');
+      return;
+    }
+    
+    // Get the crop data
+    const cropData = GameConfig.crops[cropType];
+    if (!cropData) {
+      console.error(`Crop type not found: ${cropType}`);
+      return;
+    }
+    
+    // Check if player has enough wheat
+    const playerColor = GameState.getPlayerColor();
+    if (!GameState.updateWheat(playerColor, -cropData.cost)) {
+      showMessage(`Not enough wheat to plant ${cropData.name}`);
+      return;
+    }
+    
+    // Plant the crop
+    plot.state = 'planted';
+    plot.crop = cropData;
+    plot.turnsToHarvest = cropData.turnsTillHarvest;
+    
+    console.log(`Planted ${cropData.name} in plot ${plotId}`);
+    showMessage(`Planted ${cropData.name} for ${cropData.cost} wheat`);
+    
+    // Register the farm action
+    GameState.registerFarmAction();
+    
+    // Update the farm display
+    updateFarmDisplay();
+    
+    // Send the update to the server
+    SocketManager.sendFarmUpdate('plant', {
+      plotId: plotId,
+      cropType: cropType
+    });
+  }
+  
+  /**
+   * Harvest a crop from a plot
+   * @param {string} plotId - The ID of the plot to harvest
+   */
+  function harvestCrop(plotId) {
+    // Check if player can perform a farm action
+    if (!canPerformFarmAction()) {
+      showMessage('You cannot harvest now');
+      return;
+    }
+    
+    // Get the plot
+    const plot = getPlotById(plotId);
+    if (!plot) {
+      console.error(`Plot not found: ${plotId}`);
+      return;
+    }
+    
+    // Check if the plot is ready for harvest
+    if (plot.state !== 'ready') {
+      console.warn(`Plot ${plotId} is not ready for harvest`);
+      showMessage('This crop is not ready for harvest');
+      return;
+    }
+    
+    // Get the crop data
+    const cropData = plot.crop;
+    if (!cropData) {
+      console.error(`Crop data not found for plot ${plotId}`);
+      return;
+    }
+    
+    // Update player's wheat
+    const playerColor = GameState.getPlayerColor();
+    GameState.updateWheat(playerColor, cropData.yield);
+    
+    // Clear the plot
+    plot.state = 'empty';
+    plot.crop = null;
+    plot.turnsToHarvest = 0;
+    
+    console.log(`Harvested ${cropData.name} from plot ${plotId}, gained ${cropData.yield} wheat`);
+    showMessage(`Harvested ${cropData.name} for ${cropData.yield} wheat`);
+    
+    // Register the farm action
+    GameState.registerFarmAction();
+    
+    // Update the farm display
+    updateFarmDisplay();
+    
+    // Send the update to the server
+    SocketManager.sendFarmUpdate('harvest', {
+      plotId: plotId
+    });
+  }
+  
+  /**
+   * Unlock a plot
+   * @param {string} plotId - The ID of the plot to unlock
+   */
+  function unlockPlot(plotId) {
+    // Check if player can perform a farm action
+    if (!canPerformFarmAction()) {
+      showMessage('You cannot unlock plots now');
+      return;
+    }
+    
+    // Get the plot
+    const plot = getPlotById(plotId);
+    if (!plot) {
+      console.error(`Plot not found: ${plotId}`);
+      return;
+    }
+    
+    // Check if the plot is unlockable
+    if (plot.state !== 'unlockable') {
+      console.warn(`Plot ${plotId} is not unlockable`);
+      showMessage('This plot cannot be unlocked yet');
+      return;
+    }
+    
+    // Get the player color from the plot ID
+    const playerColor = plotId.startsWith('white') ? 'white' : 'black';
+    
+    // Unlock the plot
+    plot.state = 'empty';
+    farms[playerColor].unlockedPlots++;
+    
+    console.log(`Unlocked plot ${plotId}`);
+    showMessage('Plot unlocked');
+    
+    // Register the farm action
+    GameState.registerFarmAction();
+    
+    // Update the farm display
+    updateFarmDisplay();
+    
+    // Send the update to the server
+    SocketManager.sendFarmUpdate('unlock', {
+      plotId: plotId
+    });
+  }
+  
+  /**
+   * Get a plot by its ID
+   * @param {string} plotId - The ID of the plot
+   * @returns {Object|null} The plot object, or null if not found
+   */
+  function getPlotById(plotId) {
+    // Check white player's plots
+    for (const plot of farms.white.plots) {
+      if (plot.id === plotId) {
+        return plot;
+      }
+    }
+    
+    // Check black player's plots
+    for (const plot of farms.black.plots) {
+      if (plot.id === plotId) {
+        return plot;
+      }
+    }
+    
     return null;
   }
   
-  // Public methods
-  return {
-    initialize() {
-      console.log('Initializing farm manager');
-      
-      // Initialize default farm state
-      const gameState = GameState.getGameState();
-      if (!gameState.farms) {
-        gameState.farms = {
-          player1: {
-            corn: 100,
-            unlocked: 2,
-            unlockable: 3,
-            captureRequired: [],
-            totalCaptures: 0,
-            plots: []
-          },
-          player2: {
-            corn: 100,
-            unlocked: 2,
-            unlockable: 3,
-            captureRequired: [],
-            totalCaptures: 0,
-            plots: []
-          }
-        };
-      }
-    },
+  /**
+   * Check if a player has unlockable plots based on the number of captures
+   * @param {string} playerColor - The player color
+   */
+  function checkUnlockPlot(playerColor) {
+    if (!farms[playerColor]) {
+      console.error(`Invalid player color: ${playerColor}`);
+      return;
+    }
     
-    initializeFarms() {
-      const gameState = GameState.getGameState();
-      
-      // Make sure farms object exists
-      if (!gameState.farms) {
-        console.error('Farms not initialized in game state');
-        this.initialize();
-      }
-      
-      // Initialize both farms
-      this.initializePlayerFarm('player1');
-      this.initializePlayerFarm('player2');
-      
-      console.log('Farms initialized for both players');
-    },
+    const captures = GameState.getCapturedPieces(playerColor);
+    const farmPlots = farms[playerColor].plots;
     
-    initializePlayerFarm(playerKey) {
-      const gameState = GameState.getGameState();
+    // Check if there are any locked plots
+    for (let i = 0; i < farmPlots.length; i++) {
+      const plot = farmPlots[i];
       
-      if (!gameState.farms || !gameState.farms[playerKey]) {
-        console.error(`Farm not found for ${playerKey}`);
-        return;
-      }
-      
-      const farmElement = getPlayerFarmElement(playerKey);
-      if (!farmElement) {
-        console.error(`Farm element not found for ${playerKey}`);
-        return;
-      }
-      
-      // Clear existing farm
-      farmElement.innerHTML = '';
-      
-      // Create plot containers based on the farm data
-      const farm = gameState.farms[playerKey];
-      const maxPlots = 12; // Maximum number of plots to display
-      
-      for (let i = 0; i < maxPlots; i++) {
-        const plotDiv = document.createElement('div');
-        plotDiv.className = 'farm-plot';
-        plotDiv.setAttribute('data-plot-index', i);
+      if (plot.state === 'locked' && plot.unlockRequirement <= captures) {
+        // Update the plot to unlockable
+        plot.state = 'unlockable';
+        console.log(`Plot ${plot.id} is now unlockable with ${captures} captures`);
         
-        // Check if plot exists in data
-        const plotData = farm.plots && farm.plots[i];
-        
-        if (plotData) {
-          // Plot is already initialized
-          plotDiv.className = `farm-plot ${plotData.state || 'locked'}`;
-          
-          if (plotData.state === 'planted') {
-            // Add plant visualization
-            const plantDiv = document.createElement('div');
-            plantDiv.className = `plant ${plotData.plantType} ${plotData.growthStage || 'seedling'}`;
-            plotDiv.appendChild(plantDiv);
-            
-            // Add harvest button for mature plants
-            if (plotData.growthStage === 'mature') {
-              const harvestBtn = document.createElement('button');
-              harvestBtn.className = 'harvest-button';
-              harvestBtn.textContent = 'Harvest';
-              harvestBtn.setAttribute('data-plot-index', i);
-              harvestBtn.addEventListener('click', () => this.harvestPlot(playerKey, i));
-              plotDiv.appendChild(harvestBtn);
-            }
-          } else if (plotData.state === 'unlocked') {
-            // Add plant button for unlocked plots
-            const plantBtn = document.createElement('button');
-            plantBtn.className = 'plant-button';
-            plantBtn.textContent = 'Plant';
-            plantBtn.setAttribute('data-plot-index', i);
-            plantBtn.addEventListener('click', () => this.showPlantSelector(playerKey, i));
-            plotDiv.appendChild(plantBtn);
-          } else if (plotData.state === 'locked') {
-            // Add unlock button (only for the player's own farm)
-            if (playerKey === GameState.getPlayerFarmKey()) {
-              const unlockBtn = document.createElement('button');
-              unlockBtn.className = 'unlock-plot-button';
-              unlockBtn.textContent = 'Unlock';
-              unlockBtn.setAttribute('data-plot-index', i);
-              plotDiv.appendChild(unlockBtn);
-            }
-          }
-        } else {
-          // Determine if the plot should be unlockable or locked
-          const isUnlocked = i < (farm.unlocked || 2);
-          const isUnlockable = i < (farm.unlocked || 2) + (farm.unlockable || 3);
-          
-          if (isUnlocked) {
-            plotDiv.className = 'farm-plot unlocked';
-            
-            // Add plant button
-            const plantBtn = document.createElement('button');
-            plantBtn.className = 'plant-button';
-            plantBtn.textContent = 'Plant';
-            plantBtn.setAttribute('data-plot-index', i);
-            plantBtn.addEventListener('click', () => this.showPlantSelector(playerKey, i));
-            plotDiv.appendChild(plantBtn);
-            
-            // Initialize in game state
-            if (!farm.plots) farm.plots = [];
-            farm.plots[i] = { state: 'unlocked' };
-          } else if (isUnlockable && playerKey === GameState.getPlayerFarmKey()) {
-            plotDiv.className = 'farm-plot locked unlockable';
-            
-            // Add unlock button
-            const unlockBtn = document.createElement('button');
-            unlockBtn.className = 'unlock-plot-button';
-            unlockBtn.textContent = 'Unlock';
-            unlockBtn.setAttribute('data-plot-index', i);
-            plotDiv.appendChild(unlockBtn);
-            
-            // Initialize in game state
-            if (!farm.plots) farm.plots = [];
-            farm.plots[i] = { state: 'locked' };
-          } else {
-            plotDiv.className = 'farm-plot locked';
-            
-            // Initialize in game state
-            if (!farm.plots) farm.plots = [];
-            farm.plots[i] = { state: 'locked' };
-          }
+        // Show a message to the player
+        if (playerColor === GameState.getPlayerColor()) {
+          showMessage('New farm plot available!');
         }
         
-        farmElement.appendChild(plotDiv);
+        break; // Only unlock one plot at a time
       }
-      
-      console.log(`Farm initialized for ${playerKey}`);
-    },
-    
-    updateCornCounts() {
-      const gameState = GameState.getGameState();
-      
-      // Make sure we have the game state and farms
-      if (!gameState || !gameState.farms) {
-        console.warn('Cannot update corn counts: Game state or farms not initialized');
-        return;
-      }
-      
-      // Update corn counts for both players
-      const player1CornElement = document.getElementById('player1-corn');
-      const player2CornElement = document.getElementById('player2-corn');
-      
-      if (player1CornElement && gameState.farms.player1) {
-        player1CornElement.textContent = gameState.farms.player1.corn || 0;
-        console.log(`Updated player1 corn count: ${gameState.farms.player1.corn}`);
-      }
-      
-      if (player2CornElement && gameState.farms.player2) {
-        player2CornElement.textContent = gameState.farms.player2.corn || 0;
-        console.log(`Updated player2 corn count: ${gameState.farms.player2.corn}`);
-      }
-    },
-    
-    unlockPlot(plotIndex) {
-      const playerKey = GameState.getPlayerFarmKey();
-      const gameState = GameState.getGameState();
-      
-      if (!gameState.farms || !gameState.farms[playerKey]) {
-        console.error(`Farm not found for ${playerKey}`);
-        return;
-      }
-      
-      const farm = gameState.farms[playerKey];
-      
-      // Check if the plot is already unlocked
-      if (farm.plots[plotIndex] && farm.plots[plotIndex].state !== 'locked') {
-        console.log(`Plot ${plotIndex} is already unlocked`);
-        showMessage('This plot is already unlocked');
-        return;
-      }
-      
-      // Calculate unlock cost (could be more complex in the future)
-      const unlockCost = 30;
-      
-      // Check if player has enough corn
-      if (farm.corn >= unlockCost) {
-        // Unlock the plot
-        farm.corn -= unlockCost;
-        
-        // Make sure plots array exists
-        if (!farm.plots) farm.plots = [];
-        
-        // Update plot state
-        farm.plots[plotIndex] = { state: 'unlocked' };
-        
-        // Increment unlocked count, decrement unlockable count
-        farm.unlocked = (farm.unlocked || 0) + 1;
-        farm.unlockable = Math.max(0, (farm.unlockable || 0) - 1);
-        
-        // Update UI
-        this.initializePlayerFarm(playerKey);
-        this.updateCornCounts();
-        
-        console.log(`Unlocked plot ${plotIndex}. New corn: ${farm.corn}`);
-        showMessage(`Unlocked plot for ${unlockCost} corn!`);
-        
-        // Send update to server
-        SocketManager.sendGameStateUpdate();
-      } else {
-        console.log(`Not enough corn to unlock plot. Have: ${farm.corn}, Need: ${unlockCost}`);
-        showMessage(`Not enough corn! You need ${unlockCost} corn to unlock this plot.`);
-      }
-    },
-    
-    showPlantSelector(playerKey, plotIndex) {
-      // Only allow planting on your own farm
-      if (playerKey !== GameState.getPlayerFarmKey()) {
-        console.log(`Cannot plant on opponent's farm`);
-        showMessage('You can only plant on your own farm!');
-        return;
-      }
-      
-      const modal = document.getElementById('plant-selector-modal');
-      if (!modal) {
-        console.error('Plant selector modal not found');
-        return;
-      }
-      
-      // Store the target plot info
-      GameState.getPlayerState().selectedPlot = {
-        playerKey: playerKey,
-        plotIndex: plotIndex
-      };
-      
-      // Display the modal
-      modal.style.display = 'block';
-      
-      // Set up plant buttons
-      document.querySelectorAll('.plant-choice').forEach(btn => {
-        btn.onclick = () => {
-          const plantType = btn.getAttribute('data-plant-type');
-          this.plantCrop(playerKey, plotIndex, plantType);
-          modal.style.display = 'none';
-        };
-      });
-      
-      // Set up cancel button
-      const cancelBtn = document.getElementById('cancel-plant');
-      if (cancelBtn) {
-        cancelBtn.onclick = () => {
-          modal.style.display = 'none';
-        };
-      }
-    },
-    
-    plantCrop(playerKey, plotIndex, plantType) {
-      const gameState = GameState.getGameState();
-      const cropData = GameState.getCropData();
-      
-      if (!gameState.farms || !gameState.farms[playerKey]) {
-        console.error(`Farm not found for ${playerKey}`);
-        return;
-      }
-      
-      const farm = gameState.farms[playerKey];
-      
-      // Check if the plot is unlocked
-      if (!farm.plots[plotIndex] || farm.plots[plotIndex].state !== 'unlocked') {
-        console.log(`Plot ${plotIndex} is not available for planting`);
-        showMessage('This plot is not available for planting');
-        return;
-      }
-      
-      // Get cost of the plant
-      const cost = cropData[plantType] ? cropData[plantType].cost : 10;
-      
-      // Check if player has enough corn
-      if (farm.corn >= cost) {
-        // Deduct cost
-        farm.corn -= cost;
-        
-        // Update plot with the plant
-        farm.plots[plotIndex] = {
-          state: 'planted',
-          plantType: plantType,
-          growthStage: 'seedling',
-          turnsPlanted: 0,
-          turnsToGrow: cropData[plantType] ? cropData[plantType].growthTime : 3
-        };
-        
-        // Update UI
-        this.initializePlayerFarm(playerKey);
-        this.updateCornCounts();
-        
-        console.log(`Planted ${plantType} in plot ${plotIndex}. New corn: ${farm.corn}`);
-        showMessage(`Planted ${plantType} for ${cost} corn!`);
-        
-        // Send update to server
-        SocketManager.sendGameStateUpdate();
-      } else {
-        console.log(`Not enough corn to plant ${plantType}. Have: ${farm.corn}, Need: ${cost}`);
-        showMessage(`Not enough corn! You need ${cost} corn to plant ${plantType}.`);
-      }
-    },
-    
-    harvestPlot(playerKey, plotIndex) {
-      const gameState = GameState.getGameState();
-      const cropData = GameState.getCropData();
-      
-      if (!gameState.farms || !gameState.farms[playerKey]) {
-        console.error(`Farm not found for ${playerKey}`);
-        return;
-      }
-      
-      const farm = gameState.farms[playerKey];
-      
-      // Check if the plot has a mature plant
-      const plot = farm.plots[plotIndex];
-      if (!plot || plot.state !== 'planted' || plot.growthStage !== 'mature') {
-        console.log('This plot cannot be harvested yet');
-        showMessage('This plant is not ready for harvest yet');
-        return;
-      }
-      
-      // Get the yield from the crop
-      const yieldAmount = cropData[plot.plantType] ? cropData[plot.plantType].yield : 3;
-      
-      // Add yield to corn count
-      farm.corn += yieldAmount;
-      
-      // Reset plot to unlocked state
-      farm.plots[plotIndex] = { state: 'unlocked' };
-      
-      // Update UI
-      this.initializePlayerFarm(playerKey);
-      this.updateCornCounts();
-      
-      console.log(`Harvested ${plot.plantType} from plot ${plotIndex}. Yield: ${yieldAmount}, New corn: ${farm.corn}`);
-      showMessage(`Harvested ${yieldAmount} corn!`);
-      
-      // Check for victory condition
-      if (farm.corn >= 200) {
-        console.log(`Player ${playerKey} has reached 200 corn!`);
-        SocketManager.sendGameOver('corn');
-      }
-      
-      // Send update to server
-      SocketManager.sendGameStateUpdate();
-    },
-    
-    growPlants() {
-      const gameState = GameState.getGameState();
-      
-      if (!gameState.farms) {
-        console.error('Farms not initialized');
-        return;
-      }
-      
-      let plantsGrown = false;
-      
-      // Update both farms
-      ['player1', 'player2'].forEach(playerKey => {
-        const farm = gameState.farms[playerKey];
-        
-        if (!farm || !farm.plots) return;
-        
-        farm.plots.forEach((plot, index) => {
-          if (plot && plot.state === 'planted' && plot.growthStage !== 'mature') {
-            // Increment turns planted
-            plot.turnsPlanted = (plot.turnsPlanted || 0) + 1;
-            
-            // Check if plant has grown
-            if (plot.turnsPlanted >= plot.turnsToGrow) {
-              // Plant is mature now
-              plot.growthStage = 'mature';
-              plantsGrown = true;
-              console.log(`Plant in ${playerKey} plot ${index} is now mature`);
-            } else if (plot.turnsPlanted >= Math.floor(plot.turnsToGrow / 2)) {
-              // Plant is in growing stage
-              plot.growthStage = 'growing';
-              plantsGrown = true;
-              console.log(`Plant in ${playerKey} plot ${index} is now growing`);
-            }
-          }
-        });
-      });
-      
-      // Update UI if any plants grew
-      if (plantsGrown) {
-        this.initializeFarms();
-        showMessage('Your crops have grown!');
-      }
-      
-      return plantsGrown;
-    },
-    
-    refreshFarms() {
-      this.initializeFarms();
-      this.updateCornCounts();
     }
+    
+    // Update the farm display
+    updateFarmDisplay();
+  }
+  
+  /**
+   * Process turns for all farm plots
+   * Reduces growth time for planted crops
+   */
+  function processTurn() {
+    // Process white player's plots
+    farms.white.plots.forEach(plot => {
+      if (plot.state === 'planted' && plot.turnsToHarvest > 0) {
+        plot.turnsToHarvest--;
+        
+        // Check if the crop is ready for harvest
+        if (plot.turnsToHarvest <= 0) {
+          plot.state = 'ready';
+          console.log(`Crop in plot ${plot.id} is ready for harvest`);
+        }
+      }
+    });
+    
+    // Process black player's plots
+    farms.black.plots.forEach(plot => {
+      if (plot.state === 'planted' && plot.turnsToHarvest > 0) {
+        plot.turnsToHarvest--;
+        
+        // Check if the crop is ready for harvest
+        if (plot.turnsToHarvest <= 0) {
+          plot.state = 'ready';
+          console.log(`Crop in plot ${plot.id} is ready for harvest`);
+        }
+      }
+    });
+    
+    // Update the farm display
+    updateFarmDisplay();
+  }
+  
+  /**
+   * Update the farm display in the UI
+   */
+  function updateFarmDisplay() {
+    const player1FarmElement = document.getElementById('player1-farm');
+    const player2FarmElement = document.getElementById('player2-farm');
+    
+    if (!player1FarmElement || !player2FarmElement) {
+      console.error('Farm elements not found');
+      return;
+    }
+    
+    // Clear the farm displays
+    player1FarmElement.innerHTML = '';
+    player2FarmElement.innerHTML = '';
+    
+    // Create the farm plots for white player
+    farms.white.plots.forEach(plot => {
+      const plotElement = createPlotElement(plot);
+      player1FarmElement.appendChild(plotElement);
+    });
+    
+    // Create the farm plots for black player
+    farms.black.plots.forEach(plot => {
+      const plotElement = createPlotElement(plot);
+      player2FarmElement.appendChild(plotElement);
+    });
+    
+    // Add event listeners to the plots
+    addPlotEventListeners();
+  }
+  
+  /**
+   * Process a farm update from the server
+   * @param {string} action - The action type ('plant', 'harvest', 'unlock')
+   * @param {Object} data - The action data
+   */
+  function processFarmUpdate(action, data) {
+    console.log(`Processing farm update: ${action}`, data);
+    
+    switch (action) {
+      case 'plant':
+        processFarmUpdatePlant(data);
+        break;
+      case 'harvest':
+        processFarmUpdateHarvest(data);
+        break;
+      case 'unlock':
+        processFarmUpdateUnlock(data);
+        break;
+      default:
+        console.warn(`Unknown farm update action: ${action}`);
+    }
+    
+    // Update the farm display
+    updateFarmDisplay();
+  }
+  
+  /**
+   * Process a 'plant' farm update from the server
+   * @param {Object} data - The action data
+   */
+  function processFarmUpdatePlant(data) {
+    const { plotId, cropType } = data;
+    
+    // Get the plot
+    const plot = getPlotById(plotId);
+    if (!plot) {
+      console.error(`Plot not found: ${plotId}`);
+      return;
+    }
+    
+    // Get the crop data
+    const cropData = GameConfig.crops[cropType];
+    if (!cropData) {
+      console.error(`Crop type not found: ${cropType}`);
+      return;
+    }
+    
+    // Plant the crop
+    plot.state = 'planted';
+    plot.crop = cropData;
+    plot.turnsToHarvest = cropData.turnsTillHarvest;
+    
+    console.log(`Opponent planted ${cropData.name} in plot ${plotId}`);
+  }
+  
+  /**
+   * Process a 'harvest' farm update from the server
+   * @param {Object} data - The action data
+   */
+  function processFarmUpdateHarvest(data) {
+    const { plotId } = data;
+    
+    // Get the plot
+    const plot = getPlotById(plotId);
+    if (!plot) {
+      console.error(`Plot not found: ${plotId}`);
+      return;
+    }
+    
+    // Clear the plot
+    plot.state = 'empty';
+    plot.crop = null;
+    plot.turnsToHarvest = 0;
+    
+    console.log(`Opponent harvested crop from plot ${plotId}`);
+  }
+  
+  /**
+   * Process an 'unlock' farm update from the server
+   * @param {Object} data - The action data
+   */
+  function processFarmUpdateUnlock(data) {
+    const { plotId } = data;
+    
+    // Get the plot
+    const plot = getPlotById(plotId);
+    if (!plot) {
+      console.error(`Plot not found: ${plotId}`);
+      return;
+    }
+    
+    // Get the player color from the plot ID
+    const playerColor = plotId.startsWith('white') ? 'white' : 'black';
+    
+    // Unlock the plot
+    plot.state = 'empty';
+    farms[playerColor].unlockedPlots++;
+    
+    console.log(`Opponent unlocked plot ${plotId}`);
+  }
+  
+  // Public API
+  return {
+    initialize,
+    initializeFarmDisplay,
+    plantCrop,
+    harvestCrop,
+    unlockPlot,
+    checkUnlockPlot,
+    processTurn,
+    updateFarmDisplay,
+    processFarmUpdate
   };
 })(); 
