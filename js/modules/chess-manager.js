@@ -61,6 +61,7 @@ const ChessManager = (function() {
   function setupTouchEventFixes() {
     // Add this to prevent the "passive event listener" warnings
     document.addEventListener('DOMContentLoaded', function() {
+      debugLog('Setting up touch event fixes for mobile');
       const boardElement = document.getElementById('chess-board');
       if (boardElement) {
         // Prevent touchmove events on the board from scrolling the page
@@ -71,7 +72,7 @@ const ChessManager = (function() {
           }
         }, { passive: false });
         
-        console.log('Touch event fixed applied to chess board');
+        debugLog('Touch event fixes applied to chess board');
       } else {
         console.warn('Chess board element not found for touch event fix');
         
@@ -84,7 +85,9 @@ const ChessManager = (function() {
                 e.preventDefault();
               }
             }, { passive: false });
-            console.log('Touch event fixes applied to chess board after delay');
+            debugLog('Touch event fixes applied to chess board after delay');
+          } else {
+            console.error('Chess board element still not found for touch event fix after delay');
           }
         }, 1000);
       }
@@ -99,7 +102,7 @@ const ChessManager = (function() {
       debugLog('Setting up chess board');
       
       // Make sure the container exists
-      const boardContainer = document.getElementById('chessboard');
+      const boardContainer = document.getElementById('chess-board');
       if (!boardContainer) {
         console.error('Chess board container not found');
         return;
@@ -141,7 +144,7 @@ const ChessManager = (function() {
       
       // Initialize the board
       debugLog('Initializing chessboard.js with config:', config);
-      chessboard = Chessboard('chessboard', config);
+      chessboard = Chessboard('chess-board', config);
       
       // Setup resize handler
       window.addEventListener('resize', () => {
@@ -501,6 +504,13 @@ const ChessManager = (function() {
         chessEngine.reset();
       }
       
+      // Check if the board container exists
+      const boardContainer = document.getElementById('chess-board');
+      if (!boardContainer) {
+        debugLog('Chess board container not found during refresh');
+        return;
+      }
+      
       // If the chessboard exists, update its position
       if (chessboard) {
         debugLog('Updating chessboard position');
@@ -536,6 +546,20 @@ const ChessManager = (function() {
     } catch (error) {
       console.error('Error refreshing chess board:', error);
     }
+  }
+  
+  /**
+   * Helper function to rotate chess pieces for black player
+   * @param {HTMLElement} boardElement - The board container element 
+   */
+  function rotatePiecesForBlackPlayer(boardElement) {
+    debugLog('Rotating pieces for black player');
+    const pieces = boardElement.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
+    debugLog(`Found ${pieces.length} pieces to rotate`);
+    
+    pieces.forEach(piece => {
+      piece.style.transform = 'rotate(180deg)';
+    });
   }
   
   // Public API
