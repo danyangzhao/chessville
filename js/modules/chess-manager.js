@@ -378,8 +378,10 @@ const ChessManager = (function() {
     if (chessboard) {
       chessboard.position(chessEngine.fen());
       
-      // If the board is flipped (black player), make sure pieces are rotated
-      if (GameState.getPlayerColor() === 'black') {
+      // Only rotate pieces if this is the black player's board
+      const playerColor = GameState.getPlayerColor();
+      if (playerColor === 'black') {
+        debugLog('Player is black, rotating pieces after snap end');
         const boardElement = document.getElementById('chess-board');
         if (boardElement) {
           rotatePiecesForBlackPlayer(boardElement);
@@ -428,10 +430,14 @@ const ChessManager = (function() {
       showMessage('Check!');
     }
     
-    // If the board is flipped (black player), rotate any new pieces
-    const boardElement = document.getElementById('chess-board');
-    if (boardElement && GameState.getPlayerColor() === 'black') {
-      rotatePiecesForBlackPlayer(boardElement);
+    // Only rotate pieces if this is the black player's board
+    const playerColor = GameState.getPlayerColor();
+    if (playerColor === 'black') {
+      debugLog('Player is black, rotating pieces after receiving move');
+      const boardElement = document.getElementById('chess-board');
+      if (boardElement) {
+        rotatePiecesForBlackPlayer(boardElement);
+      }
     }
   }
   
@@ -526,11 +532,10 @@ const ChessManager = (function() {
         
         // Get player color directly from GameState
         const playerColor = GameState.getPlayerColor();
-        const orientation = playerColor === 'white' ? 'white' : 'black';
         
-        // If black player, ensure pieces are rotated
-        if (orientation === 'black') {
-          debugLog('Rotating pieces for black player after refresh');
+        // Only rotate pieces if this is the black player's board
+        if (playerColor === 'black') {
+          debugLog('Player is black, rotating pieces after board refresh');
           setTimeout(() => {
             const pieces = document.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
             debugLog(`Found ${pieces.length} pieces to rotate after refresh`);
