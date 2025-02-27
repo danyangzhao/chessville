@@ -110,7 +110,9 @@ const GameState = (function() {
    * @returns {boolean} True if it's the player's turn
    */
   function isPlayerTurn() {
-    return gameActive && currentTurn === playerColor;
+    const result = gameActive && currentTurn === playerColor;
+    console.log(`isPlayerTurn check: gameActive=${gameActive}, currentTurn=${currentTurn}, playerColor=${playerColor}, result=${result}`);
+    return result;
   }
   
   /**

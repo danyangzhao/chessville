@@ -336,6 +336,11 @@ const UIManager = (function() {
           // Get crop data from GameConfig
           const cropData = GameConfig.crops[cropType];
           
+          // Ensure the crop data has a type property
+          if (cropData) {
+            cropData.type = cropType;
+          }
+          
           // Plant the crop
           FarmManager.plantCrop(playerColor, plotIndex, cropData);
         } else {

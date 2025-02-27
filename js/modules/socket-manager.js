@@ -196,17 +196,22 @@ const SocketManager = (function() {
     
     socket.on('turn-change', (data) => {
       console.log('Turn changed:', data);
+      console.log('Current player color:', GameState.getPlayerColor());
+      
       // Update the current turn in GameState
       if (data.color === 'white' || data.color === 'black') {
+        console.log(`Setting current turn to: ${data.color}`);
         // Switch to the new turn
         GameState.setCurrentTurn(data.color);
         UIManager.updateTurnIndicator();
         
         if (GameState.isPlayerTurn()) {
+          console.log('It is now this player\'s turn');
           GameState.setCurrentGamePhase('farming');
           UIManager.updateGamePhaseIndicator('farming');
           showMessage('Your turn - Farming Phase');
         } else {
+          console.log('It is now the opponent\'s turn');
           showMessage('Opponent\'s turn');
         }
       } else {
