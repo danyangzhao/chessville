@@ -170,7 +170,23 @@ const SocketManager = (function() {
     
     socket.on('chess-move', (move) => {
       console.log('Received chess move:', move);
+      // Process the move to update the engine state
       ChessManager.processChessMove(move);
+      
+      // If FEN was provided with the move, validate board state
+      if (move.fen) {
+        const currentFEN = ChessManager.getCurrentFEN();
+        console.log(`Received FEN: ${move.fen}`);
+        console.log(`Current FEN: ${currentFEN}`);
+        
+        // If there's a mismatch, refresh the board
+        if (currentFEN !== move.fen) {
+          console.warn('FEN mismatch detected, refreshing board');
+          // Force a complete refresh of the board
+          ChessManager.refreshBoard();
+        }
+      }
+      
       UIManager.updateTurnIndicator();
     });
     
@@ -275,6 +291,11 @@ const SocketManager = (function() {
         UIManager.updateGamePhaseIndicator(data.phase);
       }
       
+      // Refresh the chess board to ensure it's in sync
+      if (data.phase === 'chess') {
+        ChessManager.refreshBoard();
+      }
+      
       // Show prominent notification to player
       showMessage('YOUR TURN - Farming Phase!', 5000);
       
@@ -323,15 +344,16 @@ const SocketManager = (function() {
     
     console.log('Sending chess move:', move);
     
+    // Include FEN to ensure board state synchronization
+    const currentFEN = ChessManager.getCurrentFEN();
+    
     socket.emit('chess-move', {
       roomId: roomId,
-      move: move
+      move: move,
+      fen: currentFEN
     });
     
-    // End turn after making a chess move
-    socket.emit('end-turn', {
-      roomId: roomId
-    });
+    // End turn after making a chess move is handled by auto end-turn in ChessManager
   }
   
   /**

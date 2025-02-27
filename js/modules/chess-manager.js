@@ -50,15 +50,32 @@ const ChessManager = (function() {
   function setupTouchEventFixes() {
     // Add this to prevent the "passive event listener" warnings
     document.addEventListener('DOMContentLoaded', function() {
-      const boardContainer = document.getElementById('chess-container');
-      if (boardContainer) {
+      const boardElement = document.getElementById('chess-board');
+      if (boardElement) {
         // Prevent touchmove events on the board from scrolling the page
-        boardContainer.addEventListener('touchmove', function(e) {
+        boardElement.addEventListener('touchmove', function(e) {
           // Only prevent default during piece dragging
           if (GameState.getCurrentGamePhase() === 'chess' && GameState.isPlayerTurn()) {
             e.preventDefault();
           }
         }, { passive: false });
+        
+        console.log('Touch event fixed applied to chess board');
+      } else {
+        console.warn('Chess board element not found for touch event fix');
+        
+        // Try again after a short delay
+        setTimeout(function() {
+          const boardElement = document.getElementById('chess-board');
+          if (boardElement) {
+            boardElement.addEventListener('touchmove', function(e) {
+              if (GameState.getCurrentGamePhase() === 'chess' && GameState.isPlayerTurn()) {
+                e.preventDefault();
+              }
+            }, { passive: false });
+            console.log('Touch event fixes applied to chess board after delay');
+          }
+        }, 1000);
       }
     });
   }
@@ -186,8 +203,11 @@ const ChessManager = (function() {
    * @returns {string} 'snapback' to cancel the move, or undefined to allow it
    */
   function onDrop(source, target) {
+    console.log(`onDrop called: from ${source} to ${target}`);
+    
     // Do not allow moves if not in chess phase
     if (GameState.getCurrentGamePhase() !== 'chess') {
+      console.log('Move rejected: Not in chess phase');
       showMessage('You can only move pieces during the chess phase');
       return 'snapback';
     }
@@ -201,8 +221,11 @@ const ChessManager = (function() {
     
     // Invalid move
     if (move === null) {
+      console.log(`Move rejected: Invalid move from ${source} to ${target}`);
       return 'snapback';
     }
+    
+    console.log(`Valid move: ${JSON.stringify(move)}`);
     
     // Get the piece type
     const pieceType = move.piece;
@@ -256,6 +279,14 @@ const ChessManager = (function() {
     // Update the board position
     if (chessboard) {
       chessboard.position(chessEngine.fen());
+      
+      // If the board is flipped (black player), make sure pieces are rotated
+      if (GameState.getPlayerColor() === 'black') {
+        const boardElement = document.getElementById('chess-board');
+        if (boardElement) {
+          rotatePiecesForBlackPlayer(boardElement);
+        }
+      }
     }
   }
   
@@ -297,6 +328,12 @@ const ChessManager = (function() {
       showMessage('Checkmate!');
     } else if (chessEngine.in_check()) {
       showMessage('Check!');
+    }
+    
+    // If the board is flipped (black player), rotate any new pieces
+    const boardElement = document.getElementById('chess-board');
+    if (boardElement && GameState.getPlayerColor() === 'black') {
+      rotatePiecesForBlackPlayer(boardElement);
     }
   }
   
@@ -347,6 +384,57 @@ const ChessManager = (function() {
     moveCostsElement.innerHTML = html;
   }
   
+  /**
+   * Completely refresh the chess board
+   * Force a refresh of the chess board and all pieces 
+   */
+  function refreshBoard() {
+    console.log('Performing complete chess board refresh');
+    
+    if (!chessEngine) {
+      console.error('Cannot refresh board: Chess engine not initialized');
+      return;
+    }
+    
+    const boardElement = document.getElementById('chess-board');
+    if (!boardElement) {
+      console.warn('Cannot refresh board: Chessboard element not found');
+      return;
+    }
+    
+    // Store current state
+    const currentFEN = chessEngine.fen();
+    console.log(`Current FEN: ${currentFEN}`);
+    
+    // Clear the board
+    if (chessboard) {
+      chessboard.clear(false); // Don't fire events
+    }
+    
+    // Reconfigure and recreate the board
+    const config = {
+      draggable: true,
+      position: currentFEN,
+      pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+      onDragStart: onDragStart,
+      onDrop: onDrop,
+      onSnapEnd: onSnapEnd
+    };
+    
+    // Create the chessboard
+    chessboard = Chessboard(boardElement.id, config);
+    
+    // Flip the board if the player is black
+    if (GameState.getPlayerColor() === 'black') {
+      boardElement.style.transform = 'rotate(180deg)';
+      
+      // Flip all pieces
+      rotatePiecesForBlackPlayer(boardElement);
+    }
+    
+    console.log('Chess board refreshed');
+  }
+  
   // Public API
   return {
     initialize,
@@ -354,6 +442,7 @@ const ChessManager = (function() {
     updateBoard,
     processChessMove,
     showMoveCosts,
+    refreshBoard,
     getCurrentFEN: function() {
       return chessEngine ? chessEngine.fen() : null;
     }
