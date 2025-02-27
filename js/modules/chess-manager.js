@@ -139,8 +139,7 @@ const ChessManager = (function() {
         orientation: orientation,
         onDragStart: onDragStart,
         onDrop: onDrop,
-        onSnapEnd: onSnapEnd,
-        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        onSnapEnd: onSnapEnd
       };
       
       // Initialize the board
@@ -153,6 +152,48 @@ const ChessManager = (function() {
           chessboard.resize();
         }
       });
+      
+      // If black player, rotate pieces
+      if (orientation === 'black') {
+        debugLog('Rotating pieces for black player');
+        const pieces = document.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
+        debugLog(`Found ${pieces.length} pieces to rotate`);
+        
+        pieces.forEach(piece => {
+          piece.style.transform = 'rotate(180deg)';
+        });
+        
+        // Set up a mutation observer to handle new pieces added later
+        const observer = new MutationObserver(mutations => {
+          mutations.forEach(mutation => {
+            if (mutation.addedNodes.length) {
+              mutation.addedNodes.forEach(node => {
+                if (node.nodeType === 1) { // Element node
+                  const newPieces = node.querySelectorAll ? 
+                    node.querySelectorAll('img[data-piece], .piece, [class*="piece-"]') : [];
+                  
+                  if (node.matches && node.matches('img[data-piece], .piece, [class*="piece-"]')) {
+                    debugLog('Rotating newly added piece:', node);
+                    node.style.transform = 'rotate(180deg)';
+                  }
+                  
+                  if (newPieces.length) {
+                    debugLog(`Rotating ${newPieces.length} new pieces added to the DOM`);
+                    newPieces.forEach(piece => {
+                      piece.style.transform = 'rotate(180deg)';
+                    });
+                  }
+                }
+              });
+            }
+          });
+        });
+        
+        observer.observe(boardContainer, { 
+          childList: true, 
+          subtree: true 
+        });
+      }
       
       debugLog('Chess board setup complete');
     } catch (error) {
@@ -335,6 +376,14 @@ const ChessManager = (function() {
     // Update the board position
     if (chessboard) {
       chessboard.position(chessEngine.fen());
+      
+      // If the board is flipped (black player), make sure pieces are rotated
+      if (GameState.getPlayerColor() === 'black') {
+        const boardElement = document.getElementById('chess-board');
+        if (boardElement) {
+          rotatePiecesForBlackPlayer(boardElement);
+        }
+      }
     }
   }
   
@@ -357,14 +406,39 @@ const ChessManager = (function() {
       return;
     }
     
+    debugLog(`Processing opponent's move from server:`, move);
+    
+    // Log the chess engine state before applying the move
+    debugLog(`Before move - Current FEN: ${chessEngine.fen()}`);
+    debugLog(`Before move - Current turn: ${chessEngine.turn()}`);
+    
     // Make the move
     const result = chessEngine.move(move);
     if (result === null) {
       console.error('Invalid move received from server:', move);
+      
+      // Try to recover by using the provided FEN if available
+      if (move.fen) {
+        debugLog(`Attempting to recover using received FEN: ${move.fen}`);
+        try {
+          // Validate the FEN first
+          if (chessEngine.validate_fen(move.fen).valid) {
+            chessEngine.load(move.fen);
+            debugLog('Successfully recovered using received FEN');
+          } else {
+            debugLog('Received invalid FEN, cannot recover');
+          }
+        } catch (error) {
+          console.error('Error loading FEN from server:', error);
+        }
+      }
       return;
     }
     
-    console.log('Processed move from server:', move);
+    // Log the successful move and the new state
+    debugLog('Processed move from server successfully:', result);
+    debugLog(`After move - Current FEN: ${chessEngine.fen()}`);
+    debugLog(`After move - Current turn: ${chessEngine.turn()}`);
     
     // Update the board
     updateBoard();
@@ -434,6 +508,13 @@ const ChessManager = (function() {
     try {
       debugLog('Refreshing chess board with current game state');
       
+      // Check key game state information
+      const currentTurn = GameState.getCurrentTurn();
+      const playerColor = GameState.getPlayerColor();
+      const isPlayerTurn = GameState.isPlayerTurn();
+      
+      debugLog(`Game state: currentTurn=${currentTurn}, playerColor=${playerColor}, isPlayerTurn=${isPlayerTurn}`);
+      
       // Ensure the chess engine exists
       if (!chessEngine) {
         debugLog('Chess engine not initialized, creating new instance');
@@ -442,14 +523,45 @@ const ChessManager = (function() {
       
       // Log current state for debugging
       debugLog(`Current FEN: ${chessEngine.fen()}`);
-      debugLog(`Current turn: ${chessEngine.turn()}`);
-      debugLog('Legal moves:', chessEngine.moves({ verbose: true }));
+      debugLog(`Chess engine turn: ${chessEngine.turn()}`);
+      
+      // Check if chess engine turn matches game state turn
+      const chessTurn = chessEngine.turn() === 'w' ? 'white' : 'black';
+      if (chessTurn !== currentTurn) {
+        debugLog(`Chess engine turn (${chessTurn}) doesn't match game state turn (${currentTurn}), fixing...`);
+        
+        // Get the current FEN
+        let currentFEN = chessEngine.fen();
+        
+        // Split the FEN string to get its components
+        const fenParts = currentFEN.split(' ');
+        
+        // Update the turn component (fenParts[1]) based on the game state turn
+        fenParts[1] = currentTurn === 'white' ? 'w' : 'b';
+        
+        // Reconstruct the FEN string
+        const newFEN = fenParts.join(' ');
+        
+        debugLog(`Setting new FEN with corrected turn: ${newFEN}`);
+        
+        // Try to validate and load the new FEN
+        if (chessEngine.validate_fen(newFEN).valid) {
+          chessEngine.load(newFEN);
+          debugLog('Successfully corrected chess engine turn');
+        } else {
+          debugLog('Could not fix turn mismatch - FEN validation failed, resetting board');
+          chessEngine.reset();
+        }
+      }
       
       // Validate FEN string - if it's invalid, reset the board
       if (!chessEngine.validate_fen(chessEngine.fen()).valid) {
         debugLog('Invalid FEN detected, resetting to starting position');
         chessEngine.reset();
       }
+      
+      // Log available legal moves for debugging
+      debugLog('Available legal moves:', chessEngine.moves({ verbose: true }));
       
       // Check if the board container exists
       const boardContainer = document.getElementById('chess-board');
@@ -476,6 +588,20 @@ const ChessManager = (function() {
     } catch (error) {
       console.error('Error refreshing chess board:', error);
     }
+  }
+  
+  /**
+   * Helper function to rotate chess pieces for black player
+   * @param {HTMLElement} boardElement - The board container element 
+   */
+  function rotatePiecesForBlackPlayer(boardElement) {
+    debugLog('Rotating pieces for black player');
+    const pieces = boardElement.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
+    debugLog(`Found ${pieces.length} pieces to rotate`);
+    
+    pieces.forEach(piece => {
+      piece.style.transform = 'rotate(180deg)';
+    });
   }
   
   // Public API

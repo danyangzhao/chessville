@@ -177,22 +177,36 @@ const SocketManager = (function() {
       // Always refresh the board to ensure proper synchronization
       setTimeout(() => {
         console.log('Refreshing board after receiving opponent move');
+        
+        // Ensure the game state turn is correctly set before refreshing board
+        // This will help synchronize the chess engine's internal state with the game state
+        const currentPlayerColor = GameState.getPlayerColor();
+        const opponentColor = currentPlayerColor === 'white' ? 'black' : 'white';
+        
+        // If we just received a move from the opponent, it should now be our turn
+        console.log(`Setting current turn to ${currentPlayerColor} after opponent's move`);
+        GameState.setCurrentTurn(currentPlayerColor);
+        
+        // Now refresh the board with the corrected game state
         ChessManager.refreshBoard();
+        
+        // Update UI
+        UIManager.updateTurnIndicator();
       }, 200); // Small delay to ensure everything is ready
       
       // Log the board state for debugging
       if (move.fen) {
-        const currentFEN = ChessManager.getCurrentFEN();
-        console.log(`Received FEN from opponent: ${move.fen}`);
-        console.log(`Local engine FEN after move: ${currentFEN}`);
-        
-        // If there's a mismatch, log a warning
-        if (currentFEN !== move.fen) {
-          console.warn('FEN mismatch detected after applying move');
-        }
+        setTimeout(() => {
+          const currentFEN = ChessManager.getCurrentFEN();
+          console.log(`Received FEN from opponent: ${move.fen}`);
+          console.log(`Local engine FEN after move: ${currentFEN}`);
+          
+          // If there's a mismatch, log a warning
+          if (currentFEN !== move.fen) {
+            console.warn('FEN mismatch detected after applying move');
+          }
+        }, 300);
       }
-      
-      UIManager.updateTurnIndicator();
     });
     
     socket.on('farm-action', (action) => {
@@ -296,11 +310,19 @@ const SocketManager = (function() {
         UIManager.updateGamePhaseIndicator(data.phase);
       }
       
+      // Set the current turn to the player's color
+      const playerColor = GameState.getPlayerColor();
+      console.log(`Setting current turn to ${playerColor} based on your-turn event`);
+      GameState.setCurrentTurn(playerColor);
+      
       // Always refresh the chess board to ensure it's in sync when turn changes,
       // regardless of current phase
       setTimeout(() => {
         console.log('Refreshing chess board on turn change');
         ChessManager.refreshBoard();
+        
+        // Update UI
+        UIManager.updateTurnIndicator();
       }, 200); // Small delay to ensure everything is ready
       
       // Show prominent notification to player
