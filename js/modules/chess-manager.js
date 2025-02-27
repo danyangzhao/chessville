@@ -156,36 +156,14 @@ const ChessManager = (function() {
       
       // If black player, rotate pieces
       if (orientation === 'black') {
-        debugLog('Rotating pieces for black player');
-        const pieces = document.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
-        debugLog(`Found ${pieces.length} pieces to rotate`);
-        
-        pieces.forEach(piece => {
-          piece.style.transform = 'rotate(180deg)';
-        });
+        rotatePiecesForBlackPlayer(boardContainer);
         
         // Set up a mutation observer to handle new pieces added later
         const observer = new MutationObserver(mutations => {
           mutations.forEach(mutation => {
             if (mutation.addedNodes.length) {
-              mutation.addedNodes.forEach(node => {
-                if (node.nodeType === 1) { // Element node
-                  const newPieces = node.querySelectorAll ? 
-                    node.querySelectorAll('img[data-piece], .piece, [class*="piece-"]') : [];
-                  
-                  if (node.matches && node.matches('img[data-piece], .piece, [class*="piece-"]')) {
-                    debugLog('Rotating newly added piece:', node);
-                    node.style.transform = 'rotate(180deg)';
-                  }
-                  
-                  if (newPieces.length) {
-                    debugLog(`Rotating ${newPieces.length} new pieces added to the DOM`);
-                    newPieces.forEach(piece => {
-                      piece.style.transform = 'rotate(180deg)';
-                    });
-                  }
-                }
-              });
+              // If new nodes are added, re-apply rotations
+              rotatePiecesForBlackPlayer(boardContainer);
             }
           });
         });
@@ -194,6 +172,9 @@ const ChessManager = (function() {
           childList: true, 
           subtree: true 
         });
+      } else {
+        // For white player, ensure no rotations are applied
+        clearAllPieceRotations(boardContainer);
       }
       
       debugLog('Chess board setup complete');
@@ -378,13 +359,16 @@ const ChessManager = (function() {
     if (chessboard) {
       chessboard.position(chessEngine.fen());
       
-      // Only rotate pieces if this is the black player's board
+      // Apply or clear rotations based on player color
       const playerColor = GameState.getPlayerColor();
-      if (playerColor === 'black') {
-        debugLog('Player is black, rotating pieces after snap end');
-        const boardElement = document.getElementById('chess-board');
-        if (boardElement) {
+      const boardElement = document.getElementById('chess-board');
+      if (boardElement) {
+        if (playerColor === 'black') {
+          debugLog('Player is black, rotating pieces after snap end');
           rotatePiecesForBlackPlayer(boardElement);
+        } else {
+          debugLog('Player is white, clearing any rotations after snap end');
+          clearAllPieceRotations(boardElement);
         }
       }
     }
@@ -430,13 +414,16 @@ const ChessManager = (function() {
       showMessage('Check!');
     }
     
-    // Only rotate pieces if this is the black player's board
+    // Apply or clear rotations based on player color
     const playerColor = GameState.getPlayerColor();
-    if (playerColor === 'black') {
-      debugLog('Player is black, rotating pieces after receiving move');
-      const boardElement = document.getElementById('chess-board');
-      if (boardElement) {
+    const boardElement = document.getElementById('chess-board');
+    if (boardElement) {
+      if (playerColor === 'black') {
+        debugLog('Player is black, rotating pieces after receiving move');
         rotatePiecesForBlackPlayer(boardElement);
+      } else {
+        debugLog('Player is white, clearing any rotations after receiving move');
+        clearAllPieceRotations(boardElement);
       }
     }
   }
@@ -533,16 +520,16 @@ const ChessManager = (function() {
         // Get player color directly from GameState
         const playerColor = GameState.getPlayerColor();
         
-        // Only rotate pieces if this is the black player's board
+        // Apply or clear rotations based on player color
         if (playerColor === 'black') {
           debugLog('Player is black, rotating pieces after board refresh');
           setTimeout(() => {
-            const pieces = document.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
-            debugLog(`Found ${pieces.length} pieces to rotate after refresh`);
-            
-            pieces.forEach(piece => {
-              piece.style.transform = 'rotate(180deg)';
-            });
+            rotatePiecesForBlackPlayer(boardContainer);
+          }, 100); // Small delay to ensure DOM is updated
+        } else {
+          debugLog('Player is white, clearing any rotations after board refresh');
+          setTimeout(() => {
+            clearAllPieceRotations(boardContainer);
           }, 100); // Small delay to ensure DOM is updated
         }
       } else {
@@ -557,10 +544,50 @@ const ChessManager = (function() {
   }
   
   /**
+   * Clear all rotations on chess pieces
+   * @param {HTMLElement} boardElement - The board container element
+   */
+  function clearAllPieceRotations(boardElement) {
+    if (!boardElement) {
+      boardElement = document.getElementById('chess-board');
+      if (!boardElement) {
+        debugLog('Board element not found when trying to clear rotations');
+        return;
+      }
+    }
+    
+    debugLog('Clearing all piece rotations');
+    const pieces = boardElement.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
+    debugLog(`Found ${pieces.length} pieces to clear rotations from`);
+    
+    pieces.forEach(piece => {
+      piece.style.transform = '';
+    });
+  }
+  
+  /**
    * Helper function to rotate chess pieces for black player
    * @param {HTMLElement} boardElement - The board container element 
    */
   function rotatePiecesForBlackPlayer(boardElement) {
+    if (!boardElement) {
+      boardElement = document.getElementById('chess-board');
+      if (!boardElement) {
+        debugLog('Board element not found when trying to rotate pieces');
+        return;
+      }
+    }
+    
+    // First clear any existing rotations
+    clearAllPieceRotations(boardElement);
+    
+    // Only apply rotations if this is the black player
+    const playerColor = GameState.getPlayerColor();
+    if (playerColor !== 'black') {
+      debugLog('Not black player, skipping rotation');
+      return;
+    }
+    
     debugLog('Rotating pieces for black player');
     const pieces = boardElement.querySelectorAll('img[data-piece], .piece, [class*="piece-"]');
     debugLog(`Found ${pieces.length} pieces to rotate`);
