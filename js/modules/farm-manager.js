@@ -240,19 +240,32 @@ const FarmManager = (function() {
    * @returns {boolean} - Whether the planting was successful
    */
   function plantCrop(playerColor, plotIndex, cropData) {
-    console.log(`Planting crop in plot ${plotIndex} for ${playerColor}`);
+    console.log(`Attempting to plant crop in plot ${plotIndex} for ${playerColor}`);
     console.log('Crop data:', cropData);
     
+    // First check if it's the player's turn and correct phase
+    if (!canPerformFarmAction()) {
+      const reason = !GameState.isPlayerTurn() ? "It's not your turn" : 
+                     GameState.getCurrentGamePhase() !== 'farming' ? "Not in farming phase" :
+                     "Farm action already taken";
+      console.error(`Cannot plant crop: ${reason}`);
+      showMessage(`Cannot plant crop: ${reason}`);
+      return false;
+    }
+    
+    // Then check if it's the player's farm
     if (!isPlayersFarm(playerColor)) {
       console.error(`Cannot plant crop: Not ${playerColor}'s farm`);
       return false;
     }
     
+    // Then check if the plot is available
     if (!isPlotAvailable(playerColor, plotIndex)) {
       console.error(`Cannot plant crop: Plot ${plotIndex} is not available`);
       return false;
     }
     
+    // Finally check if the crop data is valid
     if (!cropData || !cropData.type) {
       console.error('Cannot plant crop: Invalid crop data');
       return false;
@@ -275,6 +288,9 @@ const FarmManager = (function() {
       timeToHarvest: cropData.growthTime || 3,
       yield: cropData.yield || 1
     };
+    
+    // Register the farm action - this marks that the player has taken an action this turn
+    GameState.registerFarmAction();
     
     // Update UI
     displayFarms();

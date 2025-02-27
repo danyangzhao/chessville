@@ -440,6 +440,12 @@ const GameState = (function() {
       } else {
         console.error(`Invalid turn value: ${turn}`);
       }
+    },
+    
+    // Reset farm action taken flag
+    resetFarmActionTaken: () => {
+      farmActionTaken = false;
+      console.log('Farm action flag reset');
     }
   };
 })(); 

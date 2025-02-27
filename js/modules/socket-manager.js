@@ -198,33 +198,17 @@ const SocketManager = (function() {
       console.log('Turn changed:', data);
       console.log('Current player color:', GameState.getPlayerColor());
       
-      // Update the current turn in GameState
+      // This is now a fallback handler, as gameStateUpdate will be the primary handler
       if (data.color === 'white' || data.color === 'black') {
-        console.log(`Setting current turn to: ${data.color}`);
-        // Switch to the new turn
+        console.log(`Turn-change event: Setting current turn to: ${data.color}`);
+        // Only update if gameStateUpdate hasn't already handled it
         GameState.setCurrentTurn(data.color);
         UIManager.updateTurnIndicator();
         
-        // Check if it's now the player's turn and show a more prominent notification
+        // Show message only - let gameStateUpdate do the more complex handling
         if (GameState.isPlayerTurn()) {
-          console.log('It is now this player\'s turn');
-          GameState.setCurrentGamePhase('farming');
-          UIManager.updateGamePhaseIndicator('farming');
-          
-          // Make the notification more prominent and with longer duration
           showMessage('YOUR TURN - Farming Phase!', 5000);
-          
-          // Optional: play a sound if available to alert the player
-          if (window.Audio) {
-            try {
-              const turnSound = new Audio('./sounds/yourturn.mp3');
-              turnSound.play().catch(e => console.warn('Could not play turn notification sound:', e));
-            } catch (e) {
-              console.warn('Sound playback not supported:', e);
-            }
-          }
         } else {
-          console.log('It is now the opponent\'s turn');
           showMessage('Opponent\'s turn');
         }
       } else {
@@ -235,39 +219,37 @@ const SocketManager = (function() {
     socket.on('gameStateUpdate', (data) => {
       console.log('Received game state update:', data);
       
-      // Update game state
+      // Update game state first
       if (data.gameState) {
         GameState.updateFromServer(data.gameState);
       }
+      
+      // Store previous turn to detect changes
+      const previousTurn = GameState.getCurrentTurn();
       
       // Update current turn
       if (data.currentTurn) {
         console.log(`Server says current turn is: ${data.currentTurn}`);
         GameState.setCurrentTurn(data.currentTurn);
-        UIManager.updateTurnIndicator();
         
-        // Check if it's now the player's turn and show notification
-        if (GameState.isPlayerTurn()) {
+        // Check if turn has changed
+        const turnHasChanged = previousTurn !== data.currentTurn;
+        console.log(`Turn has changed: ${turnHasChanged} (from ${previousTurn} to ${data.currentTurn})`);
+        
+        // Reset game phase to farming at the beginning of a turn
+        if (turnHasChanged && GameState.isPlayerTurn()) {
           console.log('It is now this player\'s turn (from gameStateUpdate)');
           GameState.setCurrentGamePhase('farming');
+          GameState.resetFarmActionTaken(); // Reset farm action flag for new turn
           UIManager.updateGamePhaseIndicator('farming');
           
           // Show notification
           showMessage('YOUR TURN - Farming Phase!', 5000);
-          
-          // Optional: play a sound if available to alert the player
-          if (window.Audio) {
-            try {
-              const turnSound = new Audio('./sounds/yourturn.mp3');
-              turnSound.play().catch(e => console.warn('Could not play turn notification sound:', e));
-            } catch (e) {
-              console.warn('Sound playback not supported:', e);
-            }
-          }
         }
       }
       
-      // Update farm display and resources
+      // Always update UI elements
+      UIManager.updateTurnIndicator();
       FarmManager.updateFarmDisplay();
       UIManager.updateResourceDisplay();
     });
