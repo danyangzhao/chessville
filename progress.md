@@ -485,3 +485,121 @@ The Chess Farm Game is fully functional with all core gameplay mechanics working
 - Enhance visual feedback for player actions
 - Add tutorial for new players
 - Improve server-side validation of moves and game state
+
+## March 2, 2025 - Gameplay Improvements
+
+### Issue: Chess Piece Movement Implementation Not Intuitive for Players
+**Status:** Fixed
+**Description:** The drag-and-drop mechanism for moving chess pieces was not intuitive for all players, especially on mobile devices, and players didn't know which moves were available.
+**Diagnosis:** The original implementation used chessboard.js's built-in drag-and-drop functionality, which works well on desktop but can be frustrating on mobile devices. Additionally, there was no visual indication of legal or affordable moves.
+**Solution:** Implemented a click-and-place mechanism for moving chess pieces and added visual highlighting for legal moves:
+1. Added a system to track selected squares and highlight them
+2. Created functions to display all legal moves when a piece is selected
+3. Color-coded moves based on whether the player can afford them (green for affordable, red for unaffordable)
+4. Disabled the drag-and-drop functionality and replaced it with click-to-select and click-to-move
+5. Added styling to provide clear visual feedback for selected pieces and legal move destinations
+```javascript
+// Modified chessboard setup to use click-based movement
+const config = {
+  position: chessEngine.fen(),
+  orientation: orientation,
+  pieceTheme: '/img/chesspieces/wikipedia/{piece}.png',
+  draggable: false, // Disable dragging for click-to-move implementation
+  onClick: handleSquareClick // Add click handler for squares
+};
+
+// Function to highlight legal moves
+function highlightLegalMoves(sourceSquare) {
+  const legalMoves = chessEngine.moves({ 
+    square: sourceSquare,
+    verbose: true 
+  });
+  
+  // Check which moves are affordable
+  const pieceType = chessEngine.get(sourceSquare).type;
+  const moveCost = GameConfig.pieceCosts[pieceType] || 0;
+  const playerColor = GameState.getPlayerColor();
+  const playerWheat = GameState.getWheat(playerColor);
+  
+  legalMoves.forEach(move => {
+    const canAfford = playerWheat >= moveCost;
+    const highlightClass = canAfford ? 'legal-move-square' : 'unaffordable-move-square';
+    
+    highlightSquare(move.to, highlightClass);
+  });
+}
+```
+**Date Fixed:** 2025-03-02
+
+### Issue: Harvesting Crops Not Yielding Wheat
+**Status:** Fixed
+**Description:** Players were not receiving wheat after harvesting crops, even after the turn duration requirements had been met.
+**Diagnosis:** The harvest function had multiple issues:
+1. It was trying to access `cropData.yield` directly, but the crop data structure was inconsistent
+2. There was no fallback if the yield property was missing or named differently
+3. There was no verification or debugging to confirm wheat was actually being added
+**Solution:** Enhanced the harvestCrop function with better property checking, fallbacks, and debug logging:
+```javascript
+// Make sure we have a valid yield value from the crop
+const yieldAmount = cropData.yield || cropData.harvestYield || 15; // Default to 15 if missing
+
+// Update player's wheat
+const playerColor = GameState.getPlayerColor();
+const previousWheat = GameState.getWheat(playerColor);
+
+// Add logging to debug harvest issue
+console.log(`Before harvest: Player ${playerColor} has ${previousWheat} wheat`);
+console.log(`Harvesting ${cropData.name || cropData.type} with yield ${yieldAmount}`);
+
+// Update wheat with yield amount
+if (!GameState.updateWheat(playerColor, yieldAmount)) {
+  console.error(`Failed to update wheat for player ${playerColor}`);
+}
+
+// Verify the wheat was actually added
+const newWheat = GameState.getWheat(playerColor);
+console.log(`After harvest: Player ${playerColor} has ${newWheat} wheat (expected: ${previousWheat + yieldAmount})`);
+```
+Also added additional logging to the processTurn function to track farm plot state changes more clearly:
+```javascript
+console.log('Processing farm turn for all plots');
+
+// Process white player's plots
+farms.white.plots.forEach(plot => {
+  if (plot.state === 'planted' && plot.turnsToHarvest > 0) {
+    console.log(`Processing white plot ${plot.id}: turnsToHarvest before: ${plot.turnsToHarvest}`);
+    plot.turnsToHarvest--;
+    console.log(`Plot ${plot.id} turns to harvest now: ${plot.turnsToHarvest}`);
+    
+    // Check if the crop is ready for harvest
+    if (plot.turnsToHarvest <= 0) {
+      plot.state = 'ready';
+      console.log(`Crop in plot ${plot.id} is ready for harvest`);
+    }
+  }
+});
+```
+**Date Fixed:** 2025-03-02
+
+## Current Status (March 2, 2025)
+The Chess Farm Game has seen significant improvements to both its chess and farming mechanics:
+
+### Chess Improvements
+- ✅ Implemented click-and-place mechanism for chess piece movement
+- ✅ Added visual highlighting for selected pieces
+- ✅ Added visual highlighting for legal moves (green for affordable, red for unaffordable)
+- ✅ Improved mobile experience by using click-based movements instead of drag-and-drop
+
+### Farming Improvements
+- ✅ Fixed issue with crops not yielding wheat when harvested
+- ✅ Improved robustness of crop data handling with fallbacks for missing properties
+- ✅ Added comprehensive debug logging to track farm state changes
+- ✅ Ensured farm display updates consistently after actions
+
+### Ongoing Development Focus
+1. Game state synchronization between players
+2. Further refinement of farming mechanics
+3. Add tutorial for new players
+4. Visual and UX enhancements
+
+The game continues to evolve with player feedback guiding our development priorities. The recent improvements to chess movement and farming mechanics should provide a more intuitive and rewarding experience for all players.

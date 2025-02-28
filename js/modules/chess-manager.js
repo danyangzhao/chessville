@@ -8,6 +8,8 @@ const ChessManager = (function() {
   let chessEngine = null;
   let chessboard = null;
   let debugMode = true; // Enable debug mode to help diagnose issues
+  let selectedSquare = null; // Track the currently selected square
+  let highlightedSquares = []; // Track currently highlighted squares
   
   /**
    * Log debug information if debug mode is enabled
@@ -134,13 +136,11 @@ const ChessManager = (function() {
       
       // Configure the board
       const config = {
-        draggable: true,
         position: chessEngine.fen(),
         orientation: orientation,
         pieceTheme: '/img/chesspieces/wikipedia/{piece}.png',
-        onDragStart: onDragStart,
-        onDrop: onDrop,
-        onSnapEnd: onSnapEnd
+        draggable: false, // Disable dragging for click-to-move implementation
+        onClick: handleSquareClick // Add click handler for squares
       };
       
       // Initialize the board
@@ -154,6 +154,9 @@ const ChessManager = (function() {
         }
       });
       
+      // Setup click handler for board squares
+      setupBoardClickHandler();
+      
       debugLog('Chess board setup complete');
     } catch (error) {
       console.error('Error setting up chess board:', error);
@@ -161,101 +164,252 @@ const ChessManager = (function() {
   }
   
   /**
-   * Handle the start of a piece drag
-   * @param {string} source - The source square
-   * @param {string} piece - The piece being dragged
-   * @param {Object} position - The current board position
-   * @param {string} orientation - The board orientation
-   * @returns {boolean} Whether the drag is allowed
+   * Set up click handlers for chess board squares
    */
-  function onDragStart(source, piece, position, orientation) {
-    console.log(`Attempting to drag piece from ${source}: ${piece}`);
-    
-    // Do not allow dragging if the game is over
-    if (chessEngine.game_over()) {
-      console.log('Game is over, cannot move pieces');
-      return false;
+  function setupBoardClickHandler() {
+    const boardElement = document.getElementById('chess-board');
+    if (!boardElement) {
+      console.error('Chess board container not found when setting up click handler');
+      return;
     }
     
-    // Only allow the current player to move pieces
-    if (!GameState.isPlayerTurn()) {
-      console.log('Not your turn, cannot move pieces');
-      return false;
-    }
+    boardElement.addEventListener('click', function(event) {
+      const target = event.target;
+      const square = findSquareFromElement(target);
+      
+      if (square) {
+        handleSquareClick(square);
+      }
+    });
     
-    // Only allow dragging in the chess phase
-    if (GameState.getCurrentGamePhase() !== 'chess') {
-      console.log('Not in chess phase, cannot move pieces');
-      showMessage('You can only move pieces during the chess phase');
-      return false;
-    }
-    
-    // Only allow dragging pieces of the player's color
-    const playerColor = GameState.getPlayerColor();
-    if ((playerColor === 'white' && piece.search(/^b/) !== -1) ||
-        (playerColor === 'black' && piece.search(/^w/) !== -1)) {
-      console.log(`Cannot move opponent's pieces (${piece})`);
-      return false;
-    }
-    
-    console.log(`Drag allowed for ${piece} from ${source}`);
-    return true;
+    debugLog('Board click handler set up');
   }
   
   /**
-   * Handle piece drop - this is the core function that manages chess piece movement
-   * @param {string} source - Source square
-   * @param {string} target - Target square
-   * @param {string} piece - Piece being moved
-   * @param {Object} newPos - New position
-   * @param {Object} oldPos - Old position
-   * @param {string} orientation - Board orientation
-   * @returns {string|undefined} 'snapback' to cancel the move, or undefined to allow it
+   * Find the chess square associated with a clicked element
+   * @param {HTMLElement} element - The clicked element
+   * @returns {string|null} The square notation (e.g., 'e4') or null if not found
    */
-  function onDrop(source, target, piece, newPos, oldPos, orientation) {
-    debugLog(`onDrop called - Source: ${source}, Target: ${target}, Piece: ${piece}, Orientation: ${orientation}`);
-    debugLog(`Current turn: ${chessEngine.turn()}, FEN: ${chessEngine.fen()}`);
-    
-    // Log current piece positions for debugging
-    debugLog('Current position:', oldPos);
-    
-    // If source and target are the same, this is not a valid move (just a click or failed drag)
-    if (source === target) {
-      debugLog(`Source and target are the same (${source}), not a valid move. Likely a click or failed drag.`);
-      return 'snapback';
+  function findSquareFromElement(element) {
+    // Check if we clicked directly on a square
+    if (element.classList && element.classList.contains('square-55d63')) {
+      return element.getAttribute('data-square');
     }
     
-    // Do not allow moves if not in chess phase
+    // Check if we clicked on a piece
+    if (element.classList && (element.classList.contains('piece-417db') || 
+                            element.tagName.toLowerCase() === 'img')) {
+      // Look for the parent square
+      const parent = element.closest('.square-55d63');
+      if (parent) {
+        return parent.getAttribute('data-square');
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Handle click on a chess square
+   * @param {string} square - The clicked square in notation (e.g., 'e4')
+   */
+  function handleSquareClick(square) {
+    debugLog(`Square clicked: ${square}`);
+    
+    // Don't allow clicks if it's not the player's turn or not in chess phase
+    if (!GameState.isPlayerTurn()) {
+      debugLog('Not your turn, ignoring click');
+      return;
+    }
+    
     if (GameState.getCurrentGamePhase() !== 'chess') {
-      debugLog('Move rejected: Not in chess phase');
+      debugLog('Not in chess phase, ignoring click');
       showMessage('You can only move pieces during the chess phase');
-      return 'snapback';
+      return;
+    }
+    
+    const position = chessboard.position();
+    const piece = position[square];
+    
+    // If no piece is selected yet
+    if (selectedSquare === null) {
+      // Make sure there's a piece on the clicked square
+      if (!piece) {
+        debugLog('Clicked on empty square, no action needed');
+        return;
+      }
+      
+      // Make sure it's the player's piece
+      const playerColor = GameState.getPlayerColor();
+      const pieceColor = piece.charAt(0);
+      const playerPiecePrefix = playerColor === 'white' ? 'w' : 'b';
+      
+      if (pieceColor !== playerPiecePrefix) {
+        debugLog(`Clicked opponent's piece (${piece}), cannot select`);
+        return;
+      }
+      
+      // Select the square and highlight legal moves
+      selectSquare(square);
+    } else {
+      // A piece is already selected, try to move it
+      const moveResult = tryMovePiece(selectedSquare, square);
+      
+      // If move was unsuccessful, check if player clicked on another of their pieces
+      if (!moveResult && piece) {
+        const playerColor = GameState.getPlayerColor();
+        const pieceColor = piece.charAt(0);
+        const playerPiecePrefix = playerColor === 'white' ? 'w' : 'b';
+        
+        if (pieceColor === playerPiecePrefix) {
+          // Clicked on another of their pieces, select this one instead
+          clearSelection();
+          selectSquare(square);
+          return;
+        }
+      }
+      
+      // Clear selection regardless of move result
+      clearSelection();
+    }
+  }
+  
+  /**
+   * Select a square and highlight legal moves
+   * @param {string} square - The square to select
+   */
+  function selectSquare(square) {
+    debugLog(`Selecting square: ${square}`);
+    selectedSquare = square;
+    
+    // Add highlight to selected square
+    highlightSquare(square, 'selected-square');
+    
+    // Highlight legal moves
+    highlightLegalMoves(square);
+  }
+  
+  /**
+   * Clear current selection and highlights
+   */
+  function clearSelection() {
+    debugLog('Clearing selection');
+    selectedSquare = null;
+    
+    // Remove all highlighted squares
+    clearHighlightedSquares();
+  }
+  
+  /**
+   * Highlight a square with a specific class
+   * @param {string} square - The square to highlight
+   * @param {string} className - The CSS class to add
+   */
+  function highlightSquare(square, className) {
+    const squareElement = document.querySelector(`.square-55d63[data-square="${square}"]`);
+    if (squareElement) {
+      squareElement.classList.add(className);
+      highlightedSquares.push({ square, className });
+    }
+  }
+  
+  /**
+   * Clear all highlighted squares
+   */
+  function clearHighlightedSquares() {
+    highlightedSquares.forEach(({ square, className }) => {
+      const squareElement = document.querySelector(`.square-55d63[data-square="${square}"]`);
+      if (squareElement) {
+        squareElement.classList.remove(className);
+      }
+    });
+    
+    highlightedSquares = [];
+  }
+  
+  /**
+   * Highlight all legal moves from a source square
+   * @param {string} sourceSquare - The source square
+   */
+  function highlightLegalMoves(sourceSquare) {
+    const legalMoves = chessEngine.moves({ 
+      square: sourceSquare,
+      verbose: true 
+    });
+    
+    debugLog(`Legal moves from ${sourceSquare}:`, legalMoves);
+    
+    // Check which moves are affordable
+    const pieceType = chessEngine.get(sourceSquare).type;
+    const moveCost = GameConfig.pieceCosts[pieceType] || 0;
+    const playerColor = GameState.getPlayerColor();
+    const playerWheat = GameState.getWheat(playerColor);
+    
+    legalMoves.forEach(move => {
+      const canAfford = playerWheat >= moveCost;
+      const highlightClass = canAfford ? 'legal-move-square' : 'unaffordable-move-square';
+      
+      highlightSquare(move.to, highlightClass);
+    });
+    
+    // Add CSS to head if not already present
+    addHighlightStyles();
+  }
+  
+  /**
+   * Add CSS styles for highlighted squares if not already present
+   */
+  function addHighlightStyles() {
+    if (!document.getElementById('chess-highlight-styles')) {
+      const styleElement = document.createElement('style');
+      styleElement.id = 'chess-highlight-styles';
+      styleElement.textContent = `
+        .selected-square {
+          background-color: rgba(20, 85, 30, 0.5) !important;
+        }
+        .legal-move-square {
+          background-color: rgba(0, 128, 0, 0.3) !important;
+        }
+        .unaffordable-move-square {
+          background-color: rgba(255, 0, 0, 0.3) !important;
+        }
+      `;
+      document.head.appendChild(styleElement);
+    }
+  }
+  
+  /**
+   * Try to move a piece from source to target
+   * @param {string} source - The source square
+   * @param {string} target - The target square
+   * @returns {boolean} True if the move was successful
+   */
+  function tryMovePiece(source, target) {
+    debugLog(`Attempting to move from ${source} to ${target}`);
+    
+    // Check if source and target are the same
+    if (source === target) {
+      debugLog('Source and target are the same, not a valid move');
+      return false;
+    }
+    
+    const pieceColor = chessboard.position()[source].charAt(0);
+    const playerColor = GameState.getPlayerColor();
+    const chessPieceColor = playerColor === 'white' ? 'w' : 'b';
+    
+    // Check if it's the player's piece
+    if (pieceColor !== chessPieceColor) {
+      debugLog(`Not your piece to move. Piece color: ${pieceColor}, Player chess color: ${chessPieceColor}`);
+      return false;
     }
     
     // Check if it's the player's turn
-    const pieceColor = piece.charAt(0);
-    const playerColor = GameState.getPlayerColor();
-    // Convert player color (white/black) to chess piece color (w/b)
-    const chessPieceColor = playerColor === 'white' ? 'w' : 'b';
-    
-    debugLog(`Piece color: ${pieceColor}, Player color: ${playerColor}, Chess color: ${chessPieceColor}`);
-    
-    if (pieceColor !== chessPieceColor) {
-      debugLog(`Not your piece to move. Piece color: ${pieceColor}, Player chess color: ${chessPieceColor}`);
-      return 'snapback';
-    }
-    
-    // Verify it's the player's turn
     if (chessEngine.turn() !== chessPieceColor) {
       debugLog(`Not your turn. Engine turn: ${chessEngine.turn()}, Player chess color: ${chessPieceColor}`);
-      return 'snapback';
+      return false;
     }
     
-    // Log legal moves for debugging
-    const legalMoves = chessEngine.moves({ verbose: true });
-    debugLog('Legal moves:', legalMoves);
-    
-    // Check if the move is valid
+    // Try to make the move
     try {
       const moveConfig = {
         from: source,
@@ -263,23 +417,13 @@ const ChessManager = (function() {
         promotion: 'q' // Always promote to queen for simplicity
       };
       
-      debugLog('Attempting move with config:', moveConfig);
-      
-      // Debug current board position
-      debugLog('Current FEN before move:', chessEngine.fen());
-      
       // Attempt the move
       const move = chessEngine.move(moveConfig);
       
       // If the move is invalid, it will return null
       if (move === null) {
         debugLog(`Move rejected: Invalid move from ${source} to ${target}`);
-        
-        // Check if any legal move exists for this piece
-        const movesForPiece = legalMoves.filter(m => m.from === source);
-        debugLog(`Legal moves for piece at ${source}:`, movesForPiece);
-        
-        return 'snapback';
+        return false;
       }
       
       // Log the successful move
@@ -297,8 +441,11 @@ const ChessManager = (function() {
         // Undo the move
         chessEngine.undo();
         showMessage(`Not enough wheat to move this piece (cost: ${moveCost})`);
-        return 'snapback';
+        return false;
       }
+      
+      // Update the board display
+      updateBoard();
       
       // Check if a piece was captured
       if (move.captured) {
@@ -330,10 +477,10 @@ const ChessManager = (function() {
         showMessage('Automatically ending turn after chess move');
       }, 1000); // 1 second delay to allow for visual feedback
       
-      return undefined;
+      return true;
     } catch (error) {
       console.error('Error processing move:', error);
-      return 'snapback';
+      return false;
     }
   }
   
@@ -354,6 +501,9 @@ const ChessManager = (function() {
     if (chessboard && chessEngine) {
       chessboard.position(chessEngine.fen());
     }
+    
+    // Clear any selections when the board updates
+    clearSelection();
   }
   
   /**

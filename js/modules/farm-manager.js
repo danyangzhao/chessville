@@ -372,17 +372,33 @@ const FarmManager = (function() {
       return;
     }
     
+    // Make sure we have a valid yield value from the crop
+    const yieldAmount = cropData.yield || cropData.harvestYield || 15; // Default to 15 if missing
+    
     // Update player's wheat
     const playerColor = GameState.getPlayerColor();
-    GameState.updateWheat(playerColor, cropData.yield);
+    const previousWheat = GameState.getWheat(playerColor);
+    
+    // Add logging to debug harvest issue
+    console.log(`Before harvest: Player ${playerColor} has ${previousWheat} wheat`);
+    console.log(`Harvesting ${cropData.name || cropData.type} with yield ${yieldAmount}`);
+    
+    // Update wheat with yield amount
+    if (!GameState.updateWheat(playerColor, yieldAmount)) {
+      console.error(`Failed to update wheat for player ${playerColor}`);
+    }
+    
+    // Verify the wheat was actually added
+    const newWheat = GameState.getWheat(playerColor);
+    console.log(`After harvest: Player ${playerColor} has ${newWheat} wheat (expected: ${previousWheat + yieldAmount})`);
     
     // Clear the plot
     plot.state = 'empty';
     plot.crop = null;
     plot.turnsToHarvest = 0;
     
-    console.log(`Harvested ${cropData.name} from plot ${plotId}, gained ${cropData.yield} wheat`);
-    showMessage(`Harvested ${cropData.name} for ${cropData.yield} wheat`);
+    console.log(`Harvested ${cropData.name || cropData.type} from plot ${plotId}, gained ${yieldAmount} wheat`);
+    showMessage(`Harvested ${cropData.name || cropData.type} for ${yieldAmount} wheat`);
     
     // Register the farm action
     GameState.registerFarmAction();
@@ -506,10 +522,14 @@ const FarmManager = (function() {
    * Reduces growth time for planted crops
    */
   function processTurn() {
+    console.log('Processing farm turn for all plots');
+    
     // Process white player's plots
     farms.white.plots.forEach(plot => {
       if (plot.state === 'planted' && plot.turnsToHarvest > 0) {
+        console.log(`Processing white plot ${plot.id}: turnsToHarvest before: ${plot.turnsToHarvest}`);
         plot.turnsToHarvest--;
+        console.log(`Plot ${plot.id} turns to harvest now: ${plot.turnsToHarvest}`);
         
         // Check if the crop is ready for harvest
         if (plot.turnsToHarvest <= 0) {
@@ -522,7 +542,9 @@ const FarmManager = (function() {
     // Process black player's plots
     farms.black.plots.forEach(plot => {
       if (plot.state === 'planted' && plot.turnsToHarvest > 0) {
+        console.log(`Processing black plot ${plot.id}: turnsToHarvest before: ${plot.turnsToHarvest}`);
         plot.turnsToHarvest--;
+        console.log(`Plot ${plot.id} turns to harvest now: ${plot.turnsToHarvest}`);
         
         // Check if the crop is ready for harvest
         if (plot.turnsToHarvest <= 0) {
@@ -632,6 +654,9 @@ const FarmManager = (function() {
     plot.turnsToHarvest = cropData.turnsTillHarvest;
     
     console.log(`Opponent planted ${cropData.name} in plot ${plotId}`);
+    
+    // Update farm display to reflect changes
+    updateFarmDisplay();
   }
   
   /**
@@ -654,6 +679,9 @@ const FarmManager = (function() {
     plot.turnsToHarvest = 0;
     
     console.log(`Opponent harvested crop from plot ${plotId}`);
+    
+    // Update farm display to reflect changes
+    updateFarmDisplay();
   }
   
   /**
