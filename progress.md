@@ -832,7 +832,7 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
    ```
 
 **Benefits:**
-1. Players now reliably receive wheat when crops are ready for harvest
+1. Players now reliably receive wheat when crops are ready
 2. The farm system is more robust against data inconsistencies
 3. If one method fails, multiple fallback mechanisms ensure players still receive their wheat
 4. Enhanced logging provides better visibility for debugging
@@ -911,3 +911,43 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 3. Optimizing game performance on less powerful mobile devices
 4. Adding new crop types and game mechanics
 5. Improving game tutorials and onboarding for new players
+
+## Auto-Harvesting Reliability Improvements (March 4, 2025)
+
+**Issue:** Players were not receiving wheat when crops were ready, and farm plots were not being cleared.
+
+**Status:** Fixed.
+
+**Description:** The auto-harvesting functionality wasn't reliably harvesting crops when they became ready. Players planted crops that would show as ready but weren't being automatically harvested, leading to confusion and economic imbalance in the game.
+
+**Diagnosis:** The issue stemmed from several problems:
+1. The processTurn function wasn't consistently checking all plots for all players
+2. There was inadequate error handling during the auto-harvesting process
+3. The yield extraction logic wasn't working consistently
+4. There was no visual indicator of turns until harvest
+
+**Solution:**
+1. Completely rewrote the processTurn function to be more robust and reliable
+2. Added a helper function (processSinglePlot) to handle individual plot processing
+3. Enhanced the autoHarvestCrop function with multiple fallbacks and better error handling
+4. Added visual turns-to-harvest counters and ready indicators to plots
+5. Added detailed logging for easier debugging
+6. Implemented emergency fallback for wheat updates if the standard method fails
+7. Always clearing plots after harvesting attempts to prevent endless loops
+
+**Benefits:**
+- Players now reliably receive wheat when crops are ready
+- Farm plots now properly clear after harvesting
+- Visual countdown indicators show turns remaining until harvest
+- Checkmark indicators show when crops are ready
+- More robust error handling prevents cascading failures
+- Detailed logging makes debugging easier
+
+**Date Fixed:** March 4, 2025
+
+## Current Development Focus:
+- Further enhance mobile responsiveness
+- Quality-of-life improvements
+- Performance optimization
+- New crop types
+- Tutorial improvements

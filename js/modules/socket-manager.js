@@ -273,33 +273,41 @@ const SocketManager = (function() {
         
         // ENHANCED TURN CHANGE DETECTION AND PROCESSING
         if (turnHasChanged) {
-          console.log('Turn has changed - PROCESSING FARM PLOTS - Explicitly calling FarmManager.processTurn()');
+          console.log('-------------------------');
+          console.log('TURN HAS CHANGED - PROCESSING FARM PLOTS');
+          console.log('Previous turn: ' + previousTurn + ', New turn: ' + data.currentTurn);
+          console.log('-------------------------');
           
-          // Make sure FarmManager exists and has the processTurn function
+          // Explicitly verify FarmManager exists and can be called
           if (typeof FarmManager === 'undefined') {
-            console.error('FarmManager is undefined, cannot process farm plots');
+            console.error('ERROR: FarmManager is undefined, cannot process farm plots');
           } else if (typeof FarmManager.processTurn !== 'function') {
-            console.error('FarmManager.processTurn is not a function, cannot process farm plots');
+            console.error('ERROR: FarmManager.processTurn is not a function, cannot process farm plots');
           } else {
-            // Log farm state before processing
-            console.log('Farm state before processing turn:');
             try {
-              const farmState = FarmManager.getState ? FarmManager.getState() : 'Farm state not available';
-              console.log(farmState);
+              console.log('Calling FarmManager.processTurn() to advance crops and auto-harvest');
+              // This should advance crops and auto-harvest ready ones
+              FarmManager.processTurn();
+              console.log('FarmManager.processTurn() completed successfully');
             } catch (error) {
-              console.error('Error getting farm state:', error);
+              console.error('ERROR during FarmManager.processTurn():', error);
+              
+              // Try to recover by updating display at least
+              try {
+                if (typeof FarmManager.updateFarmDisplay === 'function') {
+                  FarmManager.updateFarmDisplay();
+                  console.log('Recovered by updating farm display after error');
+                }
+              } catch (displayError) {
+                console.error('ERROR updating farm display during recovery:', displayError);
+              }
             }
             
-            // Process the turn - this should advance crops and auto-harvest ready ones
-            FarmManager.processTurn();
-            
-            // Log farm state after processing
-            console.log('Farm state after processing turn:');
+            // Ensure UI is updated after farm processing
             try {
-              const farmState = FarmManager.getState ? FarmManager.getState() : 'Farm state not available';
-              console.log(farmState);
-            } catch (error) {
-              console.error('Error getting farm state:', error);
+              UIManager.updateResourceDisplay();
+            } catch (uiError) {
+              console.error('ERROR updating resource display after farm processing:', uiError);
             }
           }
         }

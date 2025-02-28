@@ -31,6 +31,45 @@ const FarmManager = (function() {
     try {
       console.log('Initializing Farm Manager');
       
+      // Add CSS for turns and ready indicators
+      const style = document.createElement('style');
+      style.textContent = `
+        .farm-plot .turns-indicator {
+          position: absolute;
+          bottom: 5px;
+          right: 5px;
+          background-color: rgba(0, 0, 0, 0.7);
+          color: white;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: bold;
+          z-index: 5;
+        }
+        
+        .farm-plot .ready-indicator {
+          position: absolute;
+          top: 5px;
+          right: 5px;
+          background-color: rgba(0, 255, 0, 0.7);
+          color: white;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          font-weight: bold;
+          z-index: 5;
+        }
+      `;
+      document.head.appendChild(style);
+      
       // Initialize farms
       initializeFarmState('white');
       initializeFarmState('black');
@@ -66,7 +105,8 @@ const FarmManager = (function() {
         index: i,
         state: plotState,
         crop: null,
-        turnsToHarvest: 0,
+        plantedTurn: null,
+        turnsToHarvest: null,
         unlockRequirement: i >= GameConfig.farmConfig.startingUnlockedPlots 
           ? GameConfig.farmConfig.plotUnlockRequirements[i - GameConfig.farmConfig.startingUnlockedPlots] 
           : 0
@@ -317,6 +357,7 @@ const FarmManager = (function() {
         yield: cropData.yield,
         cost: cropData.cost
       },
+      plantedTurn: GameState.getCurrentTurn(),
       turnsToHarvest: cropData.growthTime
     };
     
@@ -518,172 +559,312 @@ const FarmManager = (function() {
   }
   
   /**
-   * Process turns for all farm plots
-   * Reduces growth time for planted crops
+   * Process turns for all farm plots and manage crop growth
    */
   function processTurn() {
-    console.log('Processing farm turn for all plots');
+    console.log('FarmManager.processTurn(): STARTING PROCESSING OF ALL FARM PLOTS');
     
-    // Process white player's plots
-    farms.white.plots.forEach(plot => {
-      if (plot.state === 'planted' && plot.turnsToHarvest > 0) {
-        console.log(`Processing white plot ${plot.id}: turnsToHarvest before: ${plot.turnsToHarvest}`);
-        plot.turnsToHarvest--;
-        console.log(`Plot ${plot.id} turns to harvest now: ${plot.turnsToHarvest}`);
-        
-        // Check if the crop is ready for harvest
-        if (plot.turnsToHarvest <= 0) {
-          plot.state = 'ready';
-          console.log(`Crop in plot ${plot.id} is ready for harvest`);
-          
-          // Automatically harvest crops that are ready for white player
-          autoHarvestCrop(plot, 'white');
-        }
-      }
-    });
-    
-    // Process black player's plots
-    farms.black.plots.forEach(plot => {
-      if (plot.state === 'planted' && plot.turnsToHarvest > 0) {
-        console.log(`Processing black plot ${plot.id}: turnsToHarvest before: ${plot.turnsToHarvest}`);
-        plot.turnsToHarvest--;
-        console.log(`Plot ${plot.id} turns to harvest now: ${plot.turnsToHarvest}`);
-        
-        // Check if the crop is ready for harvest
-        if (plot.turnsToHarvest <= 0) {
-          plot.state = 'ready';
-          console.log(`Crop in plot ${plot.id} is ready for harvest`);
-          
-          // Automatically harvest crops that are ready for black player
-          autoHarvestCrop(plot, 'black');
-        }
-      }
-    });
-    
-    // Update the farm display
-    updateFarmDisplay();
+    try {
+      // Log farm state before processing
+      const currentTurn = GameState.getCurrentTurn();
+      console.log(`Current game turn: ${currentTurn}`);
+      
+      // Process white player plots
+      console.log('Processing WHITE player plots:');
+      farms.white.plots.forEach(plot => {
+        processSinglePlot(plot, 'white');
+      });
+      
+      // Process black player plots
+      console.log('Processing BLACK player plots:');
+      farms.black.plots.forEach(plot => {
+        processSinglePlot(plot, 'black');
+      });
+      
+      // Update the display after all processing
+      updateFarmDisplay();
+      console.log('FarmManager.processTurn(): COMPLETED PROCESSING OF ALL FARM PLOTS');
+    } catch (error) {
+      console.error('CRITICAL ERROR in FarmManager.processTurn():', error);
+    }
   }
   
   /**
-   * Get the current state of the farm system for debugging
-   * @returns {Object} The current state of the farms
-   */
-  function getState() {
-    const whitePlots = farms.white.plots.map(plot => ({
-      id: plot.id,
-      state: plot.state,
-      turnsToHarvest: plot.turnsToHarvest,
-      crop: plot.crop ? {
-        name: plot.crop.name || plot.crop.type,
-        yield: plot.crop.yield || plot.crop.harvestYield || 15
-      } : null
-    }));
-    
-    const blackPlots = farms.black.plots.map(plot => ({
-      id: plot.id,
-      state: plot.state,
-      turnsToHarvest: plot.turnsToHarvest,
-      crop: plot.crop ? {
-        name: plot.crop.name || plot.crop.type,
-        yield: plot.crop.yield || plot.crop.harvestYield || 15
-      } : null
-    }));
-    
-    return {
-      whiteWheat: GameState.getWheat('white'),
-      blackWheat: GameState.getWheat('black'),
-      whitePlots,
-      blackPlots
-    };
-  }
-  
-  /**
-   * Automatically harvest a crop that is ready
+   * Helper to process a single plot during turn change
    * @param {Object} plot - The plot object
    * @param {string} playerColor - The color of the player who owns the plot
    */
-  function autoHarvestCrop(plot, playerColor) {
-    if (plot.state !== 'ready' || !plot.crop) {
-      console.log(`Cannot auto-harvest plot ${plot.id}: state=${plot.state}, has crop=${!!plot.crop}`);
-      return; // Not ready for harvest or no crop data
+  function processSinglePlot(plot, playerColor) {
+    if (!plot) {
+      console.error(`Invalid plot for ${playerColor} player`);
+      return;
     }
     
-    console.log(`Auto-harvesting crop from plot ${plot.id} for ${playerColor}`);
+    const plotId = plot.id;
+    console.log(`Processing ${playerColor} plot ${plotId}:`, 
+      `state=${plot.state}`, 
+      `crop=${plot.crop}`, 
+      `turnsToHarvest=${plot.turnsToHarvest}`);
     
     try {
-      // Get the crop data
-      const cropData = plot.crop;
-      
-      if (!cropData) {
-        console.error(`Crop data is missing from plot ${plot.id}`);
-        return;
+      // Only process plots that are planted and have a valid crop
+      if (plot.state === PLOT_STATE.PLANTED && plot.crop) {
+        const cropData = CROPS[plot.crop];
+        
+        if (!cropData) {
+          console.error(`Invalid crop data for ${plot.crop} in plot ${plotId}`);
+          return;
+        }
+        
+        // If turnsToHarvest is null or undefined, initialize it based on crop data
+        if (plot.turnsToHarvest === null || plot.turnsToHarvest === undefined) {
+          plot.turnsToHarvest = cropData.growthTime || cropData.turnsTillHarvest || 3;
+          console.log(`Initializing turnsToHarvest for ${plotId} to ${plot.turnsToHarvest}`);
+        }
+        
+        // Decrement turns counter
+        if (plot.turnsToHarvest > 0) {
+          plot.turnsToHarvest--;
+          console.log(`${playerColor} plot ${plotId}: ${plot.turnsToHarvest} turns remaining until harvest`);
+        }
+        
+        // Check if the crop is ready to harvest
+        if (plot.turnsToHarvest <= 0) {
+          console.log(`CROP READY: ${playerColor} plot ${plotId} (${plot.crop}) is now ready for harvest`);
+          plot.state = PLOT_STATE.READY;
+          
+          // Attempt auto-harvest for the ready crop
+          autoHarvestCrop(plot);
+        }
+      }
+      // Also check for plots that are already in READY state
+      else if (plot.state === PLOT_STATE.READY && plot.crop) {
+        console.log(`CROP ALREADY READY: ${playerColor} plot ${plotId} (${plot.crop}) - attempting auto-harvest`);
+        autoHarvestCrop(plot);
       }
       
-      // Make sure we have a valid yield value from the crop
-      // Improved yield extraction with multiple fallbacks and detailed logging
-      let yieldAmount = 15; // Default fallback yield
+      // Always update the plot display
+      updatePlotDisplay(plot);
       
+    } catch (error) {
+      console.error(`Error processing ${playerColor} plot ${plotId}:`, error);
+    }
+  }
+  
+  /**
+   * Auto-harvest crops that are ready
+   * @param {Object} plot - The plot object
+   */
+  function autoHarvestCrop(plot) {
+    if (!plot) {
+      console.error('autoHarvestCrop called with undefined plot');
+      return false;
+    }
+    
+    console.log(`AUTO-HARVEST: Attempting to auto-harvest plot ${plot.id} for player ${plot.player}`);
+    
+    try {
+      // Verify the plot is in the READY state
+      if (plot.state !== PLOT_STATE.READY) {
+        console.log(`Plot ${plot.id} is not ready for harvest, state: ${plot.state}`);
+        return false;
+      }
+      
+      // Verify the plot has a valid crop
+      if (!plot.crop) {
+        console.error(`Plot ${plot.id} has no crop to harvest`);
+        // Reset to empty state to avoid further attempts
+        plot.state = PLOT_STATE.EMPTY;
+        updatePlotDisplay(plot);
+        return false;
+      }
+      
+      // Get the crop data
+      const cropData = CROPS[plot.crop];
+      if (!cropData) {
+        console.error(`Invalid crop data for ${plot.crop} in plot ${plot.id}`);
+        // Reset to empty state to avoid further attempts
+        plot.state = PLOT_STATE.EMPTY;
+        updatePlotDisplay(plot);
+        return false;
+      }
+      
+      // Determine yield amount (try multiple property names for robustness)
+      let yieldAmount = 0;
+      
+      // Log all available properties for debugging
+      console.log(`Crop data for ${plot.crop}:`, cropData);
+      
+      // Try multiple possible property names for yield amount
       if (typeof cropData.yield === 'number') {
         yieldAmount = cropData.yield;
-        console.log(`Using crop.yield value: ${yieldAmount}`);
+        console.log(`Using 'yield' property: ${yieldAmount}`);
+      } else if (typeof cropData.yieldAmount === 'number') {
+        yieldAmount = cropData.yieldAmount;
+        console.log(`Using 'yieldAmount' property: ${yieldAmount}`);
       } else if (typeof cropData.harvestYield === 'number') {
         yieldAmount = cropData.harvestYield;
-        console.log(`Using crop.harvestYield value: ${yieldAmount}`);
-      } else if (typeof cropData.baseYield === 'number') {
-        yieldAmount = cropData.baseYield;
-        console.log(`Using crop.baseYield value: ${yieldAmount}`);
+        console.log(`Using 'harvestYield' property: ${yieldAmount}`);
+      } else if (typeof cropData.harvest === 'number') {
+        yieldAmount = cropData.harvest;
+        console.log(`Using 'harvest' property: ${yieldAmount}`);
       } else {
-        console.warn(`No yield property found in crop data, using default value: ${yieldAmount}`);
-        console.log('Crop data:', JSON.stringify(cropData));
+        // Default to the yield of wheat if available, or a fallback value
+        yieldAmount = CROPS.wheat ? (CROPS.wheat.yield || 3) : 3;
+        console.log(`No yield property found, defaulting to ${yieldAmount}`);
       }
       
-      // Update player's wheat
-      const previousWheat = GameState.getWheat(playerColor);
+      // Sanity check the yield amount
+      if (yieldAmount <= 0) {
+        console.error(`Invalid yield amount (${yieldAmount}) for ${plot.crop}, using default of 3`);
+        yieldAmount = 3;
+      }
       
-      // Add logging to debug auto-harvest
-      console.log(`Before auto-harvest: Player ${playerColor} has ${previousWheat} wheat`);
-      console.log(`Auto-harvesting ${cropData.name || cropData.type || 'unknown crop'} with yield ${yieldAmount}`);
+      console.log(`AUTO-HARVEST: harvesting ${plot.crop} from plot ${plot.id} for ${yieldAmount} wheat`);
       
-      // Update wheat with yield amount - ENSURE THIS GOES THROUGH
-      if (!GameState.updateWheat(playerColor, yieldAmount)) {
-        console.error(`Failed to update wheat for player ${playerColor} during auto-harvest`);
-        // Try forcibly updating the wheat
+      // Update the player's wheat
+      let success = false;
+      
+      try {
+        // Standard method to update wheat via GameState
+        if (typeof GameState !== 'undefined' && 
+            typeof GameState.updateWheat === 'function') {
+          success = GameState.updateWheat(plot.player, yieldAmount);
+          console.log(`Standard wheat update for ${plot.player}: ${success ? 'SUCCESS' : 'FAILED'}`);
+        }
+      } catch (wheatError) {
+        console.error('Error updating wheat via GameState:', wheatError);
+      }
+      
+      // Emergency fallback: direct resources update if standard method failed
+      if (!success) {
         try {
-          // Direct update to ensure wheat is added
-          const resources = GameState.getResources ? GameState.getResources() : null;
-          if (resources && resources[playerColor]) {
-            resources[playerColor].wheat += yieldAmount;
-            console.log(`Forcibly updated ${playerColor} player wheat: ${resources[playerColor].wheat}`);
-            // Update UI after forced update
-            if (typeof UIManager !== 'undefined' && UIManager.updateResourceDisplay) {
-              UIManager.updateResourceDisplay();
+          console.log('Attempting emergency direct resources update...');
+          if (typeof GameState !== 'undefined' && 
+              typeof GameState.getResources === 'function') {
+            const resources = GameState.getResources(plot.player);
+            if (resources && typeof resources.wheat === 'number') {
+              resources.wheat += yieldAmount;
+              console.log(`Emergency update: ${plot.player} wheat set to ${resources.wheat}`);
+              success = true;
+              
+              // Trigger UI update if possible
+              if (typeof UIManager !== 'undefined' && 
+                  typeof UIManager.updateResourceDisplay === 'function') {
+                UIManager.updateResourceDisplay();
+              }
             }
           }
-        } catch (error) {
-          console.error('Error during forced wheat update:', error);
+        } catch (emergencyError) {
+          console.error('Error during emergency wheat update:', emergencyError);
         }
-        return;
       }
       
-      // Verify the wheat was actually added
-      const newWheat = GameState.getWheat(playerColor);
-      console.log(`After auto-harvest: Player ${playerColor} has ${newWheat} wheat (expected: ${previousWheat + yieldAmount})`);
-      
-      // Clear the plot
-      plot.state = 'empty';
+      // Always clear the plot after harvesting, regardless of wheat update success
+      // This prevents endless auto-harvest attempts on the same plot
+      plot.state = PLOT_STATE.EMPTY;
       plot.crop = null;
-      plot.turnsToHarvest = 0;
+      plot.turnsToHarvest = null;
+      updatePlotDisplay(plot);
       
-      console.log(`Auto-harvested ${cropData.name || cropData.type || 'unknown crop'} from plot ${plot.id}, ${playerColor} gained ${yieldAmount} wheat`);
+      console.log(`AUTO-HARVEST for plot ${plot.id}: ${success ? 'SUCCESSFUL' : 'PARTIALLY FAILED'} - plot cleared`);
+      return success;
       
-      // Send the update to the server
-      if (typeof SocketManager !== 'undefined' && SocketManager.sendFarmUpdate) {
-        SocketManager.sendFarmUpdate('harvest', {
-          plotId: plot.id
-        });
-      }
     } catch (error) {
-      console.error(`Error during auto-harvest for plot ${plot.id}:`, error);
+      console.error(`Error in autoHarvestCrop for plot ${plot.id}:`, error);
+      
+      // Attempt to clear the plot despite the error
+      try {
+        plot.state = PLOT_STATE.EMPTY;
+        plot.crop = null;
+        plot.turnsToHarvest = null;
+        updatePlotDisplay(plot);
+        console.log(`Plot ${plot.id} cleared after error during auto-harvest`);
+      } catch (clearError) {
+        console.error(`Failed to clear plot ${plot.id} after error:`, clearError);
+      }
+      
+      return false;
+    }
+  }
+  
+  /**
+   * Update the display of a plot element
+   * @param {Object} plot - The plot to update
+   */
+  function updatePlotDisplay(plot) {
+    try {
+        if (!plot || !plot.display) {
+            console.error('updatePlotDisplay: Invalid plot or display element');
+            return;
+        }
+        
+        const element = plot.display;
+        
+        // Remove all state classes first
+        Object.values(PLOT_STATE).forEach(state => {
+            element.classList.remove(state);
+        });
+        
+        // Add the current state class
+        element.classList.add(plot.state);
+        
+        // Clear any existing content
+        element.innerHTML = '';
+        
+        // Create inner container for plot content (helps with positioning indicators)
+        const plotContent = document.createElement('div');
+        plotContent.classList.add('plot-content');
+        element.appendChild(plotContent);
+        
+        // Add crop image if there is a crop
+        if (plot.crop && (plot.state === PLOT_STATE.PLANTED || plot.state === PLOT_STATE.READY)) {
+            const cropData = CROPS[plot.crop];
+            if (cropData) {
+                const cropImg = document.createElement('img');
+                cropImg.src = cropData.image;
+                cropImg.alt = plot.crop;
+                cropImg.classList.add('crop-image');
+                plotContent.appendChild(cropImg);
+                
+                // Add turns to harvest indicator for planted crops
+                if (plot.state === PLOT_STATE.PLANTED && 
+                    plot.turnsToHarvest !== null && 
+                    plot.turnsToHarvest !== undefined) {
+                    const turnsIndicator = document.createElement('div');
+                    turnsIndicator.classList.add('turns-indicator');
+                    turnsIndicator.textContent = plot.turnsToHarvest;
+                    element.appendChild(turnsIndicator);
+                    console.log(`Added turns indicator for plot ${plot.id}: ${plot.turnsToHarvest} turns remaining`);
+                }
+            }
+        }
+        
+        // Add ready indicator for ready crops
+        if (plot.state === PLOT_STATE.READY) {
+            const readyIndicator = document.createElement('div');
+            readyIndicator.classList.add('ready-indicator');
+            readyIndicator.textContent = '✓';
+            element.appendChild(readyIndicator);
+            console.log(`Added ready indicator for plot ${plot.id}`);
+        }
+        
+        // Always update tooltip with plot state info
+        let tooltipText = `Plot ${plot.id}`;
+        if (plot.crop && plot.state === PLOT_STATE.PLANTED) {
+            tooltipText += ` - ${plot.crop} (${plot.turnsToHarvest} turns to harvest)`;
+        } else if (plot.crop && plot.state === PLOT_STATE.READY) {
+            tooltipText += ` - ${plot.crop} (Ready to harvest!)`;
+        } else if (plot.state === PLOT_STATE.EMPTY) {
+            tooltipText += ' - Empty';
+        } else if (plot.state === PLOT_STATE.LOCKED) {
+            tooltipText += ' - Locked';
+        }
+        
+        element.setAttribute('title', tooltipText);
+        
+    } catch (error) {
+        console.error('Error updating plot display:', error);
     }
   }
   
@@ -780,6 +961,7 @@ const FarmManager = (function() {
       yield: cropData.yield,
       cost: cropData.cost
     };
+    plot.plantedTurn = GameState.getCurrentTurn();
     plot.turnsToHarvest = cropData.turnsTillHarvest;
     
     console.log(`Opponent planted ${cropData.name} in plot ${plotId}`);
