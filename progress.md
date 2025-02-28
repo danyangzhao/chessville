@@ -1035,3 +1035,34 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 3. Achievements and player progression tracking
 4. Improved chess piece movement visualization
 5. Game playback/review system for completed games
+
+## Function Reference Error Fix (March 5, 2025)
+
+### Issue: Missing Reference to `initializeFarmDisplay` in Public API
+**Status:** Fixed
+**Description:** After implementing the automatic harvesting system, users were experiencing an error: `Uncaught TypeError: FarmManager.initializeFarmDisplay is not a function` when trying to start a game. This occurred in `ui-manager.js` line 308 when setting up the game UI.
+**Diagnosis:** The error occurred because the `initializeFarmDisplay` function was defined in the `farm-manager.js` file but wasn't being exposed in the public API. The UI manager was trying to call this function directly but couldn't access it.
+**Solution:** Updated the public API in `farm-manager.js` to include the `initializeFarmDisplay` function:
+```javascript
+// Public API
+return {
+  initialize,
+  initializeModule: initialize, // Backwards compatibility alias
+  initializeFarmDisplay, // Added this to fix the reference error
+  plantCrop,
+  // ... other functions ...
+};
+```
+**Benefits:**
+- Fixed the console error that was breaking game initialization
+- Ensured proper farm display initialization when the game starts
+- Maintained the separation of concerns while providing necessary access
+
+**Date Fixed:** March 5, 2025
+
+## Current Development Focus
+1. Continuing to improve the user experience with the auto-harvesting system
+2. Adding more visual enhancements to the farming interface
+3. Resolving edge cases in the game flow
+4. Improving performance for mobile devices
+5. Expanding crop variety and gameplay options

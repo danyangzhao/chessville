@@ -1212,6 +1212,7 @@ const FarmManager = (function() {
   return {
     initialize,
     initializeModule: initialize, // Backwards compatibility alias
+    initializeFarmDisplay,
     plantCrop,
     unlockPlot,
     updateFarmDisplay,
