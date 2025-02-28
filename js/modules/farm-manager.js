@@ -74,6 +74,9 @@ const FarmManager = (function() {
       initializeFarmState('white');
       initializeFarmState('black');
       
+      // Initialize farm displays
+      initializeFarmDisplay();
+      
       console.log('Farm Manager initialized');
       initialized = true;
       return true;
@@ -82,6 +85,9 @@ const FarmManager = (function() {
       return false;
     }
   }
+  
+  // Create an alias of initialize as initializeModule for backward compatibility
+  const initializeModule = initialize;
   
   /**
    * Initialize the farm state for a player
@@ -1129,9 +1135,54 @@ const FarmManager = (function() {
     updateFarmDisplay();
   }
   
+  /**
+   * Get the current state of the farm system for debugging
+   * @returns {Object} The current state of the farms
+   */
+  function getState() {
+    try {
+      const whitePlots = farms.white.plots.map(plot => ({
+        id: plot.id,
+        state: plot.state,
+        turnsToHarvest: plot.turnsToHarvest,
+        crop: plot.crop ? {
+          name: plot.crop.name || plot.crop.type || plot.crop,
+          yield: typeof plot.crop === 'object' ? (plot.crop.yield || plot.crop.harvestYield || 3) : 3
+        } : null
+      }));
+      
+      const blackPlots = farms.black.plots.map(plot => ({
+        id: plot.id,
+        state: plot.state,
+        turnsToHarvest: plot.turnsToHarvest,
+        crop: plot.crop ? {
+          name: plot.crop.name || plot.crop.type || plot.crop,
+          yield: typeof plot.crop === 'object' ? (plot.crop.yield || plot.crop.harvestYield || 3) : 3
+        } : null
+      }));
+      
+      const whiteWheat = typeof GameState !== 'undefined' && GameState.getWheat ? 
+        GameState.getWheat('white') : 'Unknown';
+      
+      const blackWheat = typeof GameState !== 'undefined' && GameState.getWheat ? 
+        GameState.getWheat('black') : 'Unknown';
+      
+      return {
+        whiteWheat: whiteWheat,
+        blackWheat: blackWheat,
+        whitePlots,
+        blackPlots
+      };
+    } catch (error) {
+      console.error('Error in getState:', error);
+      return { error: error.message };
+    }
+  }
+  
   // Public API
   return {
     initialize,
+    initializeModule,
     initializeFarmDisplay,
     plantCrop,
     harvestCrop,
@@ -1142,6 +1193,8 @@ const FarmManager = (function() {
     processFarmUpdate,
     updateFarmsFromServer,
     processFarmAction,
-    getState
+    getState,
+    autoHarvestCrop,
+    updatePlotDisplay
   };
 })(); 

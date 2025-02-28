@@ -391,8 +391,15 @@ const SocketManager = (function() {
    */
   function joinRoom(username, roomId = '') {
     if (!socket) {
-      console.error('Socket not initialized');
-      return;
+      console.error('Socket not initialized, attempting to re-initialize');
+      
+      // Try to re-initialize the socket manager
+      if (!initialize()) {
+        console.error('Failed to re-initialize Socket Manager, cannot join room');
+        UIManager.updateGameStatus('Connection error. Please refresh the page.');
+        showMessage('Cannot connect to the server. Please try refreshing the page.', 5000);
+        return;
+      }
     }
     
     // If roomId is the username (which happens when user types in room code in the username field)

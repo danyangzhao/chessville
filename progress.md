@@ -951,3 +951,40 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 - Performance optimization
 - New crop types
 - Tutorial improvements
+
+## Connection Errors After Auto-Harvesting Updates (March 4, 2025)
+
+**Issue:** Connection errors were occurring after implementing the auto-harvesting improvements and turns-to-harvest counters.
+
+**Status:** Fixed
+
+**Description:** After implementing the auto-harvesting improvements, users were experiencing errors when trying to connect to a game. The error logs showed:
+- `farm-manager.js:1145 Uncaught ReferenceError: getState is not defined`
+- `client-core.js:61 Critical initialization error: ReferenceError: FarmManager is not defined`
+- `socket-manager.js:394 Socket not initialized`
+
+**Diagnosis:** These errors were caused by:
+1. The `getState` function was referenced in the `processTurn` function but was missing from the actual implementation.
+2. There was a mismatch between the functions exposed in the public API and those referenced in the code.
+3. The socket initialization was failing due to dependency issues.
+
+**Solution:**
+1. Added the missing `getState` function to the FarmManager module to expose farm state for debugging.
+2. Created an alias for the initialize function as initializeModule for backward compatibility.
+3. Updated the public API to expose all required functions including autoHarvestCrop and updatePlotDisplay.
+4. Added error handling and re-initialization logic to the SocketManager's joinRoom function to prevent failures when the socket is not properly initialized.
+
+**Benefits:**
+- Game connects properly without initialization errors.
+- The auto-harvesting improvements and turns-to-harvest counters work correctly.
+- Added error recovery mechanisms to prevent cascading failures.
+- Improved robustness of the initialization sequence.
+
+**Date Fixed:** March 4, 2025
+
+## Current Development Focus:
+- Continue testing and refining the auto-harvesting functionality
+- Improve user feedback for farm actions
+- Implement additional visual indicators for gameplay status
+- Enhance cross-browser compatibility
+- Optimize performance on mobile devices
