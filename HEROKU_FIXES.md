@@ -94,3 +94,34 @@ heroku logs --tail
 ```
 
 The application should now start successfully without module errors, and the chess pieces should be visible on the board. 
+
+## Additional Static File Serving Fix
+
+**Issue:**
+Even after implementing local hosting for chess piece images, 404 errors persisted on Heroku:
+```
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/wQ.png 404 (Not Found)
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/bP.png 404 (Not Found)
+```
+
+**Diagnosis:**
+The Express static file middleware was only configured to serve files from the root directory, but the chess piece images were located in the `public` directory.
+
+**Solution:**
+Added an additional static file middleware to serve files from the `public` directory:
+
+```javascript
+// Original configuration
+app.use(express.static(__dirname));
+
+// Added this additional middleware to serve files from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
+```
+
+This ensures that Express will look in both the root directory and the `public` directory when serving static files, allowing the chess piece images to be properly accessed at the path `/img/chesspieces/wikipedia/{piece}.png`.
+
+**Summary of Fixed Issues:**
+1. Chess.js module import error - Fixed by using a stable version
+2. Chess piece image 404 errors - Fixed by:
+   - First, downloading and hosting the images locally
+   - Then, properly configuring Express to serve static files from the public directory 
