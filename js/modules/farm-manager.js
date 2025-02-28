@@ -1223,7 +1223,7 @@ const FarmManager = (function() {
   function handlePlantButtonClick(event) {
     const plotId = event.target.dataset.plotId;
     if (canPerformFarmAction()) {
-      UiManager.showPlantSelector(plotId);
+      UIManager.showPlantSelector(plotId);
     } else {
       showMessage('You cannot plant now');
     }

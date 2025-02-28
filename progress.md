@@ -1145,3 +1145,38 @@ try {
 - Implement end-game conditions and victory/defeat screens
 - Add farm display improvements and visual feedback
 - Create a tutorial for new players
+
+## Module Reference Inconsistency Fix (Current Date)
+
+### Issue: Incorrect UI Manager Reference in Farm Manager
+**Status:** Fixed
+
+**Description:** After implementing several fixes for the farm system, users encountered a new error: `Uncaught ReferenceError: UiManager is not defined` when attempting to click on farm plots. This prevented players from planting crops and accessing farm functionality.
+
+**Diagnosis:** The error occurred because the farm-manager.js file was using an incorrect reference to the UI manager module. In the `handlePlantButtonClick` function, it was using `UiManager` (lowercase 'i') instead of the correct `UIManager` (uppercase 'I') that is defined in ui-manager.js.
+
+**Solution:** Updated the reference in the handlePlantButtonClick function to use the correct capitalization:
+
+```javascript
+function handlePlantButtonClick(event) {
+  const plotId = event.target.dataset.plotId;
+  if (canPerformFarmAction()) {
+    UIManager.showPlantSelector(plotId);  // Corrected from UiManager to UIManager
+  } else {
+    showMessage('You cannot plant now');
+  }
+}
+```
+
+**Key Changes:**
+- Fixed the capitalization of UIManager throughout the codebase to ensure consistency
+- Verified that all function calls use the correct module reference
+- Ensured the event handler correctly delegates to the UI manager's functionality
+
+**Benefits:**
+- Restored ability for players to interact with farm plots
+- Fixed the planting functionality
+- Prevented JavaScript errors in the console
+- Ensured proper module communication between Farm Manager and UI Manager
+
+**Date Fixed:** Current Date
