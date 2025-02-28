@@ -50,6 +50,7 @@ const io = new Server(server);
 
 // Middleware
 app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
 
 // Game rooms storage

@@ -353,4 +353,39 @@ This approach offers several advantages:
 5. ✅ Documented the changes in HEROKU_FIXES.md
 6. ✅ Committed all changes to the repository
 
-The chess piece images are now served directly from our application, eliminating the dependency on external CDNs and ensuring consistent display of chess pieces across all environments. 
+The chess piece images are now served directly from our application, eliminating the dependency on external CDNs and ensuring consistent display of chess pieces across all environments.
+
+## Persistent Chess Piece Image Issues on Heroku (2025-02-28)
+
+Despite implementing local hosting for chess piece images and updating all references to use the local path, we were still experiencing 404 errors for chess piece images when deployed to Heroku:
+
+```
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/wQ.png 404 (Not Found)
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/bP.png 404 (Not Found)
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/wB.png 404 (Not Found)
+...and other chess piece images
+```
+
+### Issue: Chess Piece Images Not Found on Heroku
+**Status:** ✅ Fixed
+**Description:** Chess piece images that were successfully added locally were not being found on the Heroku deployment.
+**Diagnosis:** The server was not properly configured to serve static files from the 'public' directory. The Express application was only set up to serve static files from the root directory:
+
+```javascript
+// Original configuration
+app.use(express.static(__dirname));
+```
+
+However, our chess piece images were located in the 'public' directory, which wasn't being served correctly.
+
+**Solution:** Added an additional static file middleware to specifically serve files from the 'public' directory:
+
+```javascript
+// Updated configuration
+app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
+```
+
+This ensures that Express will check both the root directory and the 'public' directory when looking for static files, allowing the chess piece images to be served correctly from the '/img/chesspieces/wikipedia/' path.
+
+With this fix, the chess piece images should now be properly served on Heroku, eliminating the 404 errors and ensuring that chess pieces are displayed correctly on the board.
