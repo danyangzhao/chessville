@@ -137,7 +137,7 @@ const ChessManager = (function() {
         draggable: true,
         position: chessEngine.fen(),
         orientation: orientation,
-        pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png',
+        pieceTheme: '/img/chesspieces/wikipedia/{piece}.png',
         onDragStart: onDragStart,
         onDrop: onDrop,
         onSnapEnd: onSnapEnd

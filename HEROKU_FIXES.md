@@ -64,6 +64,28 @@ Using a reliable CDN ensures that the chess piece images are available without n
    heroku open
    ```
 
+## Additional Fix: Local Hosting of Chess Piece Images
+
+**Issue:**
+Despite using a CDN for chess piece images, there were still occasional issues with images not loading properly due to potential CORS restrictions or CDN reliability.
+
+**Solution:**
+1. Downloaded all chess piece images from the chessboardjs GitHub repository
+2. Created a local directory structure: `/public/img/chesspieces/wikipedia/`
+3. Extracted the images to this directory
+4. Updated all pieceTheme references to use the local path:
+
+```javascript
+pieceTheme: '/img/chesspieces/wikipedia/{piece}.png'
+```
+
+Files updated:
+- js/client-core.js
+- js/modules/chess-manager.js
+- public/js/app.js
+
+This approach eliminates external dependencies for chess piece images, ensuring they are always available regardless of external service status.
+
 ## Verifying the Fixes
 
 After deploying, check the Heroku logs to ensure no more errors are occurring:

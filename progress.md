@@ -294,7 +294,7 @@ heroku[router]: at=info method=GET path="/img/chesspieces/wikipedia/wP.png" host
    /public/img/chesspieces/wikipedia/
    ```
 
-2. Or preferably, update the pieceTheme URL in both app.js and chess-manager.js to use an external CDN that reliably hosts these images:
+2. Or preferably, update the pieceTheme URLs to use an external CDN that reliably hosts these images:
    ```javascript
    pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png'
    ```
@@ -311,4 +311,46 @@ heroku[router]: at=info method=GET path="/img/chesspieces/wikipedia/wP.png" host
 
 3. Re-deploy to Heroku after these changes
 
-These fixes should resolve the application crashes and missing image issues, allowing for successful deployment on Heroku. 
+These fixes should resolve the application crashes and missing image issues, allowing for successful deployment on Heroku.
+
+## Chess Piece Image Hosting Solution (2025-02-28)
+
+After the initial Heroku deployment fixes, we encountered persistent issues with chess piece images not displaying properly. While we updated the pieceTheme URLs to use the unpkg CDN, this approach still relies on external services that may have reliability or CORS issues.
+
+### Issue: Chess Piece Images Still Not Displaying
+**Status:** ✅ Completed
+**Description:** Despite updating the pieceTheme URLs to use a reliable CDN, chess piece images are still not displaying consistently on Heroku.
+**Diagnosis:** External CDN dependencies can be unreliable due to:
+1. CORS restrictions
+2. CDN availability
+3. Network latency
+4. Caching issues
+
+**Solution:** Download and serve chess piece images directly from our own server:
+1. Create a dedicated directory for chess piece images: `/public/img/chesspieces/wikipedia/`
+2. Download all required chess piece images (12 total - 6 piece types in 2 colors)
+3. Update pieceTheme URLs to reference our local path:
+   ```javascript
+   pieceTheme: '/img/chesspieces/wikipedia/{piece}.png'
+   ```
+4. Ensure the images are included in the Git repository and Heroku deployment
+
+This approach offers several advantages:
+- Eliminates dependency on external services
+- Reduces latency as images are served from the same origin
+- Prevents CORS issues
+- Ensures consistent availability
+- Chess piece images are small in size (typically <10KB each), so they won't significantly impact deployment size
+
+### Implementation Details
+1. ✅ Created the directory structure: `public/img/chesspieces/wikipedia/`
+2. ✅ Downloaded chess piece images from the official chessboardjs GitHub repository
+3. ✅ Extracted all 12 chess piece images (wP, wR, wN, wB, wQ, wK, bP, bR, bN, bB, bQ, bK)
+4. ✅ Updated pieceTheme references in all JavaScript files:
+   - js/client-core.js
+   - js/modules/chess-manager.js
+   - public/js/app.js
+5. ✅ Documented the changes in HEROKU_FIXES.md
+6. ✅ Committed all changes to the repository
+
+The chess piece images are now served directly from our application, eliminating the dependency on external CDNs and ensuring consistent display of chess pieces across all environments. 
