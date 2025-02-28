@@ -618,7 +618,21 @@
     
     /* Mobile Responsiveness Improvements */
     @media (max-width: 768px) {
-      /* Restructure player areas on mobile */
+      /* Reorder elements to place chess board above farms */
+      .main-game-area {
+        display: flex;
+        flex-direction: column;
+      }
+      
+      /* Make chess board larger and ensure it's at the top on mobile */
+      .chess-board {
+        width: 100%;
+        max-width: 95vmin;
+        min-height: 320px;
+        margin: 0 auto 20px auto;
+      }
+      
+      /* Stack player areas/farms vertically */
       .player-areas {
         flex-direction: column;
         align-items: center;
@@ -629,13 +643,6 @@
       .player-area {
         width: 100%;
         max-width: 100%;
-      }
-      
-      /* Make chess board responsive */
-      .chess-board {
-        width: 100%;
-        max-width: 90vw;
-        margin: 0 auto;
       }
       
       /* Adjust farm container to use more screen real estate */
@@ -675,6 +682,12 @@
     @media (max-width: 480px) {
       body {
         padding: 5px;
+      }
+      
+      /* Ensure chess board is still a good size on small screens */
+      .chess-board {
+        min-height: 280px;
+        max-width: 100%;
       }
       
       .farm-container {
@@ -740,6 +753,10 @@
       </div>
       
       <div class="main-game-area">
+        <!-- Chess Board - Moved outside player-areas to be above farms -->
+        <div class="chess-board" id="chess-board"></div>
+        
+        <!-- Player Areas (Farms) -->
         <div class="player-areas">
           <!-- Only show the player's own farm - we'll use CSS to conditionally display it -->
           <div class="player-area" id="player-white-area">
@@ -749,9 +766,6 @@
             </div>
             <div class="farm-container" id="player1-farm"></div>
           </div>
-          
-          <!-- Chess Board -->
-          <div class="chess-board" id="chess-board"></div>
           
           <!-- The player's farm if they are black -->
           <div class="player-area" id="player-black-area">
