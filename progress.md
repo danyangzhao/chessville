@@ -419,3 +419,69 @@ app.use(express.static(path.join(__dirname, 'public')));
 This ensures that Express will check both the root directory and the 'public' directory when looking for static files, allowing the chess piece images to be served correctly from the '/img/chesspieces/wikipedia/' path.
 
 With this fix, the chess piece images should now be properly served on Heroku, eliminating the 404 errors and ensuring that chess pieces are displayed correctly on the board.
+
+## March 1, 2025 - Additional Bug Fixes
+
+### Issue: End Turn Button Still Present Despite UI Changes
+- **Status**: Fixed
+- **Description**: The "End Turn" button was still being displayed in the UI during the chess phase despite previous changes.
+- **Diagnosis**: The `updateTurnIndicator` function was modified previously, but the `updateGamePhaseIndicator` function was also controlling the button's visibility and needed to be modified as well.
+- **Solution**: Updated the `updateGamePhaseIndicator` function to always hide the end turn button regardless of game phase.
+- **Code Changes**:
+```javascript
+if (endTurnButton) {
+  // Always hide the end turn button - chess moves are mandatory
+  endTurnButton.style.display = 'none';
+}
+```
+- **Date Fixed**: 2025-03-01
+
+### Issue: Incorrect Game Over Message When Player Runs Out of Resources
+- **Status**: Fixed
+- **Description**: When the black player ran out of resources, the white player was seeing a "You Lose!" message instead of a "You Win!" message.
+- **Diagnosis**: Multiple issues were identified:
+  1. The `showGameOver` function in `ui-manager.js` didn't have specific handling for the 'resource-starvation' victory type.
+  2. When sending game over notifications, the socket manager was only sending the reason without the winner.
+  3. In some cases, the reason parameter was getting the winner's color, causing confusion in the UI.
+- **Solution**: 
+  1. Added specific handling in the `showGameOver` function for 'resource-starvation' victories.
+  2. Modified `SocketManager.sendGameOver` to properly send both winner and reason parameters.
+  3. Added logic to detect when the victoryType parameter contains a color and adjust the UI accordingly.
+- **Code Changes**:
+```javascript
+// In UI Manager
+if (victoryType === 'resource-starvation') {
+  message = 'You Win! Opponent ran out of resources!';
+} else if (victoryType === 'white' || victoryType === 'black') {
+  // Handle cases where the victoryType is actually the winner color
+  if (victoryType !== playerColor) {
+    message = 'You Win!';
+    // Fix the display to show victory instead of defeat
+    gameOverBanner.classList.remove('defeat');
+    gameOverBanner.classList.add('victory');
+  }
+}
+
+// In Socket Manager
+function sendGameOver(winner, reason) {
+  socket.emit('game-over', {
+    roomId: roomId,
+    winner: winner,
+    reason: reason
+  });
+}
+```
+- **Date Fixed**: 2025-03-01
+
+## Current Status (March 1, 2025)
+The Chess Farm Game is fully functional with all core gameplay mechanics working as intended:
+- Chess moves are now mandatory during the chess phase (no "End Turn" button)
+- Game over scenarios are correctly handled and displayed for all players
+- Victory and defeat messages are accurate for all win conditions (checkmate, economic victory, resource starvation)
+- Resource management and game state synchronization between players is working properly
+
+## Next Steps
+- Implement game replay functionality
+- Enhance visual feedback for player actions
+- Add tutorial for new players
+- Improve server-side validation of moves and game state

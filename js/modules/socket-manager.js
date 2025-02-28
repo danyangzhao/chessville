@@ -482,18 +482,20 @@ const SocketManager = (function() {
   
   /**
    * Send a game over notification to the server
+   * @param {string} winner - The color of the winning player
    * @param {string} reason - The reason for game over
    */
-  function sendGameOver(reason) {
+  function sendGameOver(winner, reason) {
     if (!socket || !roomId) {
       console.error('Socket or room ID not initialized');
       return;
     }
     
-    console.log('Sending game over:', reason);
+    console.log('Sending game over - Winner:', winner, 'Reason:', reason);
     
     socket.emit('game-over', {
       roomId: roomId,
+      winner: winner,
       reason: reason
     });
   }

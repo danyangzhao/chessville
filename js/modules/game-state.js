@@ -406,7 +406,7 @@ const GameState = (function() {
     // Update UI to show game over
     UIManager.showGameOver(winnerColor, victoryType);
     
-    // Notify the server
+    // Notify the server - pass both winner and reason parameters
     SocketManager.sendGameOver(winnerColor, victoryType);
   }
   

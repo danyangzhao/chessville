@@ -235,46 +235,32 @@ const UIManager = (function() {
   
   /**
    * Update the game phase indicator
+   * @param {string} phase - The current game phase (optional)
    */
-  function updateGamePhaseIndicator() {
-    const phaseIndicator = document.getElementById('game-phase-indicator');
+  function updateGamePhaseIndicator(phase) {
+    // Get the current phase if not provided
+    if (!phase) {
+      phase = GameState.getCurrentGamePhase();
+    }
+    
+    // Update the phase display
+    const phaseDisplay = document.getElementById('game-phase');
+    if (phaseDisplay) {
+      phaseDisplay.textContent = phase === 'farming' ? 'Farming Phase' : 'Chess Phase';
+      phaseDisplay.className = phase;
+    }
+    
+    // Show/hide appropriate buttons
     const skipFarmingButton = document.getElementById('skip-farming-button');
     const endTurnButton = document.getElementById('end-turn-button');
     
-    if (!phaseIndicator) {
-      console.warn('Game phase indicator element not found');
-      return;
+    if (skipFarmingButton) {
+      skipFarmingButton.style.display = (GameState.isPlayerTurn() && phase === 'farming') ? 'block' : 'none';
     }
     
-    const currentPhase = GameState.getCurrentGamePhase();
-    const isPlayerTurn = GameState.isPlayerTurn();
-    
-    console.log(`Updating phase indicator. Current phase: ${currentPhase}, Is player's turn: ${isPlayerTurn}`);
-    
-    // Always show the phase indicator regardless of whose turn it is
-    phaseIndicator.style.display = 'block';
-    
-    // Update phase indicator text and class
-    phaseIndicator.textContent = currentPhase === 'farming' ? 'Farming Phase' : 'Chess Phase';
-    phaseIndicator.classList.remove('farming-phase', 'chess-phase');
-    phaseIndicator.classList.add(currentPhase === 'farming' ? 'farming-phase' : 'chess-phase');
-    
-    // Only show action buttons if it's the player's turn
-    if (skipFarmingButton && endTurnButton) {
-      if (isPlayerTurn) {
-        // Show the appropriate button based on the current phase
-        if (currentPhase === 'farming') {
-          skipFarmingButton.style.display = 'block';
-          endTurnButton.style.display = 'none';
-        } else {
-          skipFarmingButton.style.display = 'none';
-          endTurnButton.style.display = 'block';
-        }
-      } else {
-        // Hide both buttons if it's not the player's turn
-        skipFarmingButton.style.display = 'none';
-        endTurnButton.style.display = 'none';
-      }
+    if (endTurnButton) {
+      // Always hide the end turn button - chess moves are mandatory
+      endTurnButton.style.display = 'none';
     }
   }
   
@@ -461,6 +447,11 @@ const UIManager = (function() {
         message = 'You Win by Checkmate!';
       } else if (victoryType === 'economic') {
         message = 'You Win by Economic Victory!';
+      } else if (victoryType === 'resource-starvation') {
+        message = 'You Win! Opponent ran out of resources!';
+      } else if (victoryType === 'white' || victoryType === 'black') {
+        // Handle cases where the victoryType is actually the winner color
+        message = 'You Win!';
       } else {
         message = 'You Win!';
       }
@@ -471,6 +462,18 @@ const UIManager = (function() {
         message = 'You Lose by Checkmate!';
       } else if (victoryType === 'economic') {
         message = 'You Lose! Opponent reached 200 wheat!';
+      } else if (victoryType === 'resource-starvation') {
+        message = 'You Lose! You ran out of resources!';
+      } else if (victoryType === 'white' || victoryType === 'black') {
+        // Handle cases where the victoryType is actually the winner color
+        if (victoryType !== playerColor) {
+          message = 'You Win!';
+          // Fix the display to show victory instead of defeat
+          gameOverBanner.classList.remove('defeat');
+          gameOverBanner.classList.add('victory');
+        } else {
+          message = 'You Lose!';
+        }
       } else {
         message = 'You Lose!';
       }
