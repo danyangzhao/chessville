@@ -1,0 +1,327 @@
+/* General Styling */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #f4f7f9;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  padding: 20px;
+}
+
+/* Screen styles */
+.screen {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Login Screen */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: center;
+}
+
+.login-form h1 {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.form-group {
+  width: 100%;
+  max-width: 400px;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 12px 24px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #2980b9;
+}
+
+/* Waiting Screen */
+#waiting-screen {
+  text-align: center;
+}
+
+#room-code-display {
+  font-weight: bold;
+  font-size: 1.5rem;
+  color: #3498db;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #3498db;
+  border-radius: 50%;
+  margin: 2rem auto;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Game Screen */
+.game-layout {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.game-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.status-display {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+}
+
+.status-display p {
+  margin-bottom: 0.5rem;
+}
+
+#player-color, #turn-indicator {
+  font-weight: bold;
+}
+
+.message-box {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  min-height: 150px;
+  border-left: 4px solid #2ecc71;
+}
+
+/* Chess Board */
+.chess-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.chess-board {
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Highlight current player's turn */
+.turn-active {
+  color: #2ecc71;
+}
+
+.turn-inactive {
+  color: #e74c3c;
+}
+
+/* Game Header */
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.phase-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: bold;
+  color: white;
+  background-color: #3498db;
+}
+
+.phase-badge.farming {
+  background-color: #2ecc71;
+}
+
+.room-info {
+  display: flex;
+  gap: 1rem;
+}
+
+.room-info p {
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Farm Controls */
+.farm-resources {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #f39c12;
+}
+
+.farm-controls {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #2ecc71;
+}
+
+.farm-plots-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.farm-plot {
+  height: 80px;
+  background-color: #e9edc9;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.farm-plot:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.farm-plot.locked {
+  background-color: #d3d3d3;
+  cursor: not-allowed;
+}
+
+.farm-plot.growing {
+  background-color: #c6ebc9;
+}
+
+.farm-plot.ready {
+  background-color: #ffdd57;
+}
+
+.farm-plot-text {
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Movement Costs */
+.movement-costs {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #9b59b6;
+}
+
+.movement-costs ul {
+  list-style: inside;
+  padding-left: 0.5rem;
+}
+
+.movement-costs li {
+  margin-bottom: 0.3rem;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.action-button {
+  flex: 1;
+  padding: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#end-turn-btn {
+  background-color: #e74c3c;
+}
+
+#end-turn-btn:hover {
+  background-color: #c0392b;
+}
+
+#toggle-phase-btn {
+  background-color: #9b59b6;
+}
+
+#toggle-phase-btn:hover {
+  background-color: #8e44ad;
+}
+
+/* Chess Move Highlighting */
+.highlight-square {
+  box-shadow: inset 0 0 5px 3px rgba(255, 255, 0, 0.7);
+}
+
+.highlight-move-from {
+  box-shadow: inset 0 0 5px 3px rgba(106, 168, 79, 0.7);
+}
+
+.highlight-move-to {
+  box-shadow: inset 0 0 5px 3px rgba(244, 143, 66, 0.7);
+} 

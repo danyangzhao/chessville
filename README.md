@@ -1,98 +1,74 @@
-# Chess Farmer - Multiplayer Game
+# Chess Farm Game
 
-A multiplayer chess game with a farming twist! Move chess pieces, capture opponents, and grow corn to win.
+A multiplayer chess game that will eventually include farming mechanics. This project is built with Node.js, Express, Socket.io, and Chess.js.
 
 ## Features
 
-- Real-time multiplayer gameplay
-- Room-based mechanics for private games
-- Chess move validation using chess.js
-- Resource management using corn
-- Farming system with planting and harvesting
+- **Multiplayer Chess**: Play chess with another player in real-time
+- **Room-based Gameplay**: Create or join game rooms with unique room codes
+- **Turn-based System**: Proper turn management and validation
+- **Responsive UI**: Works on both desktop and mobile devices
+- **Game Status Updates**: Real-time updates about game state, checkmate, draws, etc.
+
+## Future Features
+
+- Farming mechanics integration
+- Player profiles and statistics
+- Chat functionality
+- Game replay and analysis
+
+## Project Structure
+
+```
+chess-farm-game/
+├── server.js           # Main server file with Socket.io logic
+├── package.json        # Project dependencies and scripts
+├── public/             # Client-side files
+│   ├── index.html      # Main HTML file
+│   ├── css/
+│   │   └── styles.css  # CSS styles
+│   ├── js/
+│   │   └── app.js      # Client-side JavaScript
+│   └── images/         # Game images and assets
+```
+
+## Setup Instructions
+
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Start the server:
+   ```
+   npm start
+   ```
+4. Open your browser and navigate to `http://localhost:3000`
 
 ## How to Play
 
-### Setup
+1. Enter your name and optionally a room code to join a specific game.
+2. If you don't enter a room code, a new game room will be created.
+3. Share the displayed room code with your opponent.
+4. Once your opponent joins, the game will start automatically.
+5. White goes first. Make moves by dragging and dropping pieces.
+6. The game ends when there's a checkmate or a draw.
 
-1. **Prerequisites**:
-   - Node.js (v12 or higher)
-   - npm (v6 or higher)
+## Technologies Used
 
-2. **Installation**:
-   ```bash
-   # Clone the repository
-   git clone https://github.com/yourusername/chessville.git
-   cd chessville
-
-   # Install dependencies
-   npm install
-   ```
-
-3. **Start the server**:
-   ```bash
-   node server.js
-   ```
-
-4. **Access the game**:
-   Open your browser and navigate to `http://localhost:3000`
-
-### Game Rules
-
-1. **Starting a Game**:
-   - Create a new room or join an existing one with a room ID
-   - Share the room ID with a friend to play together
-   - First player is assigned white, second player is assigned black
-
-2. **Gameplay**:
-   - Players take turns moving chess pieces and managing their farms
-   - Each chess piece costs corn to move:
-     - Pawn: 5 corn
-     - Knight: 10 corn
-     - Bishop: 8 corn
-     - Rook: 12 corn
-     - Queen: 15 corn
-     - King: 7 corn
-
-3. **Farming**:
-   - Each player starts with 100 corn and 2 unlocked farm plots
-   - Actions:
-     - Plant: Costs 3 corn, takes 3 turns to grow
-     - Harvest: Yields 10 corn when ready
-     - Unlock: Costs 5 corn to unlock additional plots
-
-4. **Winning**:
-   - Checkmate your opponent
-   - OR collect 200 corn first
-
-## Codebase Structure
-
-The game consists of three main components:
-
-1. **Server (`server.js`)**: Handles game state, player connections, and game logic
-2. **Client Modules**:
-   - `client-core.js`: Entry point and initialization
-   - `game-state.js`: Game state management
-   - `ui-manager.js`: UI interactions and screen management
-   - `chess-manager.js`: Chess board interactions
-   - `socket-manager.js`: Server communication
-   - `farm-manager.js`: Farm mechanics
-3. **HTML/CSS (`index.html`)**: Provides the game interface and styling
+- **Node.js**: Server-side JavaScript runtime
+- **Express**: Web framework for Node.js
+- **Socket.io**: Real-time bidirectional event-based communication
+- **Chess.js**: Chess move validation and game state
+- **Chessboard.js**: Chess board UI and interaction
 
 ## Development
 
-The codebase has been refactored for simplicity and maintainability. Key improvements include:
-
-- Streamlined server-side logic for game state management
-- Simplified client-side code with improved turn handling
-- Clean and responsive user interface
-- Improved error handling and logging
+To run the game in development mode with auto-restart:
+```
+npm run dev
+```
 
 ## License
 
-MIT
-
-## Acknowledgments
-
-- [chess.js](https://github.com/jhlywa/chess.js) for chess move validation
-- [Socket.IO](https://socket.io/) for real-time communication
-- [Express](https://expressjs.com/) for the web server 
+MIT 

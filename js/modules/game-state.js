@@ -206,7 +206,20 @@ const GameState = (function() {
     // If it's not player's turn, do nothing
     if (!isPlayerTurn()) {
       console.warn('Cannot end turn - not your turn');
-      return;
+      return false;
+    }
+    
+    // Check if the player has made a chess move this turn
+    if (!gamePhaseCompleted.chess) {
+      console.warn('Cannot end turn - you must make a chess move first');
+      UIManager.showMessage('You must make a chess move before ending your turn.', 'warning');
+      
+      // Force switch to chess phase if not already there
+      if (currentGamePhase !== 'chess') {
+        setCurrentGamePhase('chess');
+      }
+      
+      return false;
     }
     
     // Reset phase completion status
@@ -228,6 +241,8 @@ const GameState = (function() {
     
     // Update the UI
     UIManager.updateTurnIndicator();
+    
+    return true;
   }
   
   /**
