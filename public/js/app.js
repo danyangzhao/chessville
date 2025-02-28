@@ -194,7 +194,7 @@ function setupChessGame() {
     draggable: true,
     position: 'start',
     orientation: playerColor,
-    pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+    pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png',
     onDragStart: onDragStart,
     onDrop: onDrop,
     onSnapEnd: onSnapEnd

@@ -143,5 +143,5 @@ function showMessage(message, duration = 3000) {
 
 // Chessboard.js configuration
 var config = {
-  pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+  pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png'
 }; 

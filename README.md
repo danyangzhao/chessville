@@ -77,6 +77,16 @@ This game is configured for easy deployment to Heroku. Follow these steps to dep
 5. Push your code to Heroku: `git push heroku main`
 6. Open your deployed app: `heroku open`
 
+### Deployment Notes
+
+If you encounter deployment issues, check the following:
+
+1. Chess.js version: Ensure you're using version 0.12.0 in package.json, not the beta version
+2. Chess piece images: The app uses the unpkg CDN to load chess piece images
+3. Check Heroku logs for troubleshooting: `heroku logs --tail`
+
+For more detailed troubleshooting steps, refer to the `HEROKU_FIXES.md` file.
+
 ### Environment Variables
 
 No special environment variables are required, as the app uses `process.env.PORT` which Heroku sets automatically.

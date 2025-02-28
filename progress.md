@@ -258,4 +258,57 @@ To prepare the game for deployment to Heroku, the following steps have been take
 
 4. **Dependencies**: All necessary dependencies are properly listed in package.json.
 
-The game is now ready for Heroku deployment. The next steps are to commit these changes to a Git repository and deploy to Heroku using their CLI or GitHub integration. 
+The game is now ready for Heroku deployment. The next steps are to commit these changes to a Git repository and deploy to Heroku using their CLI or GitHub integration.
+
+## Heroku Deployment Issues (2025-02-28)
+
+The initial Heroku deployment encountered several issues that need to be resolved:
+
+### Issue: Chess.js Module Not Found Error
+**Status:** Needs Fix
+**Description:** The application crashes on Heroku with a module not found error for chess.js.
+**Diagnosis:** The error occurs because Heroku cannot find the expected file path for the chess.js module:
+```
+Error: Cannot find module '/app/node_modules/chess.js/dist/cjs/chess.js'. Please verify that the package.json has a valid "main" entry
+```
+**Solution:** Update the chess.js dependency version in package.json. The beta version (1.0.0-beta.6) seems to have a different file structure than what our code expects.
+```javascript
+// Change from
+"chess.js": "^1.0.0-beta.6"
+// To
+"chess.js": "^0.12.0"
+```
+Or alternatively, update the import in server.js to match the correct path for the beta version.
+
+### Issue: Chess Piece Images 404 Errors
+**Status:** Needs Fix
+**Description:** Chess pieces are not displaying on Heroku, resulting in 404 errors for all piece images.
+**Diagnosis:** The logs show multiple 404 errors for chess piece images:
+```
+heroku[router]: at=info method=GET path="/img/chesspieces/wikipedia/wP.png" host=chessville-edb8e53bb6f5.herokuapp.com request_id=d07ff092-9798-4bb7-bd94-58951786bc25 fwd="68.123.11.228" dyno=web.1 connect=0ms service=1ms status=404 bytes=415 protocol=https
+```
+**Solution:** The application is trying to serve these files from the local server, but they don't exist in our deployment. We need to either:
+
+1. Add the chess piece images to our project in the correct directory structure:
+   ```
+   /public/img/chesspieces/wikipedia/
+   ```
+
+2. Or preferably, update the pieceTheme URL in both app.js and chess-manager.js to use an external CDN that reliably hosts these images:
+   ```javascript
+   pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png'
+   ```
+
+### Action Plan for Successful Deployment
+
+1. Fix the chess.js dependency issue by either:
+   - Downgrading to a stable version (0.12.0)
+   - Updating the import path in server.js
+
+2. Fix the chess piece images by:
+   - Adding the image files to our project
+   - Updating pieceTheme URLs to use a reliable CDN
+
+3. Re-deploy to Heroku after these changes
+
+These fixes should resolve the application crashes and missing image issues, allowing for successful deployment on Heroku. 
