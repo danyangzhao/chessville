@@ -988,3 +988,50 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 - Implement additional visual indicators for gameplay status
 - Enhance cross-browser compatibility
 - Optimize performance on mobile devices
+
+## Automatic Harvesting System Implementation (March 5, 2025)
+
+### Issue: Manual Harvesting System Required Too Much User Interaction
+**Status:** Fixed
+**Description:** The original farming system required players to manually click "Harvest" buttons when crops were ready, creating unnecessary gameplay friction and confusion when players forgot to harvest their crops.
+**Diagnosis:** The system was designed with both manual harvesting (`harvestCrop`) and automatic harvesting (`autoHarvestCrop`) functions, but the automatic functionality wasn't fully implemented as the primary harvesting method.
+**Solution:** Completely reworked the farming phase to rely exclusively on automatic harvesting:
+1. Removed all UI elements related to manual harvesting (harvest buttons)
+2. Enhanced the visual display of the turns-to-harvest counter to be more prominent
+3. Modified the `processTurn` function to automatically harvest crops at the beginning of the farm phase
+4. Added visual indicators for crops that are ready for auto-harvesting
+5. Implemented a notification system to inform players when crops have been auto-harvested
+6. Enhanced CSS styling to make the growth stages and harvest readiness more visually clear
+
+**Key Code Changes**:
+- Removed the `harvestCrop` function from the FarmManager module
+- Updated the `createPlotElement` function to remove harvest buttons
+- Enhanced the `updatePlotDisplay` function with better visual indicators
+- Modified the `processTurn` and `processSinglePlot` functions to check for ready crops at the beginning of farm phases
+- Added countdown circles and checkmark indicators to show harvest status
+- Added CSS animations to highlight mature crops
+- Added a notification system for harvest events
+
+**Benefits:**
+- Streamlined gameplay experience with less micromanagement required
+- Clearer visual indicators for crop growth progress
+- Automatic resource collection without player intervention
+- More intuitive farming system that focuses on strategic planting decisions
+- Improved visual feedback for crop states
+
+**Date Fixed:** March 5, 2025
+
+## Current Development Focus
+1. Improving user feedback for game events
+2. Further refinement of game balance
+3. Additional crop types with unique properties
+4. Enhanced mobile responsiveness and touch controls
+5. Performance optimization
+6. Tutorial improvements for new players
+
+## Next Features Planned
+1. Weather system affecting crop growth rates
+2. Special "power crops" with unique abilities
+3. Achievements and player progression tracking
+4. Improved chess piece movement visualization
+5. Game playback/review system for completed games

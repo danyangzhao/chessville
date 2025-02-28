@@ -233,27 +233,31 @@
     }
     
     .farm-plot {
-      height: 60px;
-      border: 1px solid #81c784;
-      background-color: #c8e6c9;
+      position: relative;
+      border: 2px solid #8B4513;
+      background-color: #DEB887;
       border-radius: 5px;
+      padding: 10px;
+      min-height: 80px;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      cursor: pointer;
-      position: relative;
+      transition: all 0.3s ease;
+    }
+    
+    .farm-plot.planted {
+      background-color: #7CFC00;
+    }
+    
+    .farm-plot.ready {
+      background-color: #FFD700;
+      border-color: #FF8C00;
+      box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
     }
     
     .farm-plot.empty {
       background-color: #c8e6c9;
-    }
-    
-    .farm-plot.planted {
-      background-color: #aed581;
-    }
-    
-    .farm-plot.ready {
-      background-color: #ffeb3b;
     }
     
     .farm-plot.locked {
@@ -276,18 +280,24 @@
     }
     
     .plant.seedling {
-      font-size: 18px;
-      transform: scale(0.7);
+      font-size: 1.2em;
+      opacity: 0.6;
     }
     
     .plant.growing {
-      font-size: 24px;
-      transform: scale(0.9);
+      font-size: 1.5em;
+      opacity: 0.8;
     }
     
     .plant.mature {
-      font-size: 28px;
-      transform: scale(1);
+      font-size: 1.8em;
+      opacity: 1;
+      animation: pulse 1.5s infinite alternate;
+    }
+    
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.1); }
     }
     
     .crop-name {
@@ -712,6 +722,74 @@
       .harvest-button, .plant-button, .unlock-plot-button {
         padding: 10px 5px;
       }
+    }
+    
+    /* Enhanced farm plot styling for auto-harvesting */
+    .turns-indicator {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 10px;
+      color: #333;
+      background-color: rgba(255, 255, 255, 0.9);
+      padding: 2px;
+      border-radius: 5px;
+      z-index: 2;
+    }
+    
+    .countdown-circle {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: #4CAF50;
+      color: white;
+      font-weight: bold;
+    }
+    
+    .turns-number {
+      font-size: 14px;
+    }
+    
+    .turns-label {
+      font-size: 8px;
+      margin-top: 2px;
+      text-align: center;
+    }
+    
+    .ready-indicator {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: rgba(76, 175, 80, 0.9);
+      color: white;
+      padding: 3px 5px;
+      border-radius: 5px;
+      z-index: 2;
+    }
+    
+    .ready-checkmark {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    
+    .ready-text {
+      font-size: 8px;
+      margin-top: 2px;
+      text-align: center;
+    }
+    
+    /* Hide any remaining harvest buttons */
+    .harvest-button {
+      display: none !important;
     }
   </style>
 </head>
