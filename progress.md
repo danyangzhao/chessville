@@ -652,3 +652,86 @@ if (turnHasChanged) {
 4. Visual and UX enhancements
 
 The game continues to evolve with player feedback guiding our development priorities. The recent improvements to chess movement and farming mechanics should provide a more intuitive and rewarding experience for all players.
+
+## Mobile UI Improvements (March 2, 2025)
+
+### Issue: Farm Plot UI Squeezed to the Left Side on Mobile
+**Status:** Fixed
+**Description:** On mobile devices, the farm plot area was squeezed to the left side of the screen, making it difficult to see and interact with the plots, especially on smaller phone screens.
+**Diagnosis:** The original CSS layout used a fixed-width approach with flex containers that didn't adapt well to smaller screen sizes. There were no media queries specifically targeting the farm container layout for mobile devices.
+**Solution:** Implemented comprehensive mobile-responsive CSS using media queries to restructure the layout on smaller screens:
+
+1. Added media queries for tablets (max-width: 768px):
+   - Changed the player areas layout from horizontal to vertical stacking
+   - Made farm containers take full width of the screen
+   - Made chess board responsive with appropriate scaling
+   - Simplified header elements for better mobile viewing
+
+```css
+@media (max-width: 768px) {
+  .player-areas {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .player-area {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .chess-board {
+    width: 100%;
+    max-width: 90vw;
+    margin: 0 auto;
+  }
+  
+  /* Adjust farm container to use more screen real estate */
+  .farm-container {
+    width: 100%;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+}
+```
+
+2. Added additional optimizations for very small screens (max-width: 480px):
+   - Reduced padding and margins
+   - Adjusted font sizes for better readability
+   - Improved touch targets for buttons
+   - Further optimized farm plots for smaller screens
+
+```css
+@media (max-width: 480px) {
+  .farm-plot {
+    height: 70px;
+  }
+  
+  .crop-name, .growth-info, .locked-info {
+    font-size: 9px;
+  }
+  
+  /* Improve touch targets */
+  .harvest-button, .plant-button, .unlock-plot-button {
+    padding: 10px 5px;
+  }
+}
+```
+
+**Benefits:**
+- Farm plots now display properly across all device sizes
+- Better usability on mobile devices with improved touch targets
+- More efficient use of screen real estate
+- Responsive layout adapts to various screen sizes automatically
+- Improved overall mobile gaming experience
+
+**Date Fixed:** 2025-03-02
+
+## Current Development Focus
+1. Continuing UI/UX improvements for better cross-device compatibility
+2. Bug fixes and optimizations based on player feedback
+3. Performance enhancements for smoother gameplay
+4. Additional game features and mechanics
+
+The Chess Farm Game is now more accessible on mobile devices, allowing players to enjoy the full experience regardless of their device type or screen size.

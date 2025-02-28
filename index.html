@@ -615,6 +615,91 @@
     .debug-panel.hidden {
       display: none;
     }
+    
+    /* Mobile Responsiveness Improvements */
+    @media (max-width: 768px) {
+      /* Restructure player areas on mobile */
+      .player-areas {
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+      }
+      
+      /* Make player area (farms) take full width on mobile */
+      .player-area {
+        width: 100%;
+        max-width: 100%;
+      }
+      
+      /* Make chess board responsive */
+      .chess-board {
+        width: 100%;
+        max-width: 90vw;
+        margin: 0 auto;
+      }
+      
+      /* Adjust farm container to use more screen real estate */
+      .farm-container {
+        width: 100%;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        padding: 10px;
+      }
+      
+      /* Make farm plots larger on mobile */
+      .farm-plot {
+        height: 80px;
+        width: 100%;
+      }
+      
+      /* Ensure the game container takes full width */
+      .game-container {
+        width: 100%;
+        padding: 5px;
+      }
+      
+      /* Simplify the game header on mobile */
+      .game-header {
+        flex-direction: column;
+        gap: 10px;
+      }
+      
+      /* Make room info more compact */
+      .room-info {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+    
+    /* Additional mobile adjustments for very small screens */
+    @media (max-width: 480px) {
+      body {
+        padding: 5px;
+      }
+      
+      .farm-container {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 5px;
+      }
+      
+      .farm-plot {
+        height: 70px;
+      }
+      
+      .player-header {
+        font-size: 14px;
+        padding: 5px;
+      }
+      
+      .crop-name, .growth-info, .locked-info {
+        font-size: 9px;
+      }
+      
+      /* Improve touch targets */
+      .harvest-button, .plant-button, .unlock-plot-button {
+        padding: 10px 5px;
+      }
+    }
   </style>
 </head>
 <body>
