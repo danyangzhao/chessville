@@ -9,10 +9,13 @@ A multiplayer chess game that will eventually include farming mechanics. This pr
 - **Turn-based System**: Proper turn management and validation
 - **Responsive UI**: Works on both desktop and mobile devices
 - **Game Status Updates**: Real-time updates about game state, checkmate, draws, etc.
+- **Resource Management**: Chess moves cost wheat, which can be earned through farming and capturing pieces
+- **Farming Phase**: Plant and harvest wheat in your farm plots
+- **Strategic Gameplay**: Balance chess moves with resource management
 
 ## Future Features
 
-- Farming mechanics integration
+- Enhanced farming mechanics
 - Player profiles and statistics
 - Chat functionality
 - Game replay and analysis
@@ -20,9 +23,10 @@ A multiplayer chess game that will eventually include farming mechanics. This pr
 ## Project Structure
 
 ```
-chess-farm-game/
+chessville/
 ├── server.js           # Main server file with Socket.io logic
 ├── package.json        # Project dependencies and scripts
+├── Procfile            # Heroku deployment configuration
 ├── public/             # Client-side files
 │   ├── index.html      # Main HTML file
 │   ├── css/
@@ -30,6 +34,11 @@ chess-farm-game/
 │   ├── js/
 │   │   └── app.js      # Client-side JavaScript
 │   └── images/         # Game images and assets
+├── js/                 # Server-side modules
+│   └── modules/        # Game logic modules
+│       ├── chess-manager.js    # Chess game management
+│       ├── game-state.js       # Game state handling
+│       └── ...
 ```
 
 ## Setup Instructions
@@ -43,7 +52,7 @@ chess-farm-game/
    ```
    npm start
    ```
-4. Open your browser and navigate to `http://localhost:3000`
+4. Open your browser and navigate to `http://localhost:3002`
 
 ## How to Play
 
@@ -52,7 +61,25 @@ chess-farm-game/
 3. Share the displayed room code with your opponent.
 4. Once your opponent joins, the game will start automatically.
 5. White goes first. Make moves by dragging and dropping pieces.
-6. The game ends when there's a checkmate or a draw.
+6. Each chess piece costs wheat to move (Pawns cost 1, Knights cost 3, etc.)
+7. You can earn wheat by farming during the farming phase or by capturing opponent pieces.
+8. You must make a chess move each turn before ending your turn.
+9. If you cannot afford any legal moves, you will lose the game.
+
+## Heroku Deployment
+
+This game is configured for easy deployment to Heroku. Follow these steps to deploy:
+
+1. Create a Heroku account if you don't have one
+2. Install the Heroku CLI: `npm install -g heroku`
+3. Login to Heroku: `heroku login`
+4. Create a new Heroku app: `heroku create your-app-name`
+5. Push your code to Heroku: `git push heroku main`
+6. Open your deployed app: `heroku open`
+
+### Environment Variables
+
+No special environment variables are required, as the app uses `process.env.PORT` which Heroku sets automatically.
 
 ## Technologies Used
 
