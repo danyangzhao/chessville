@@ -564,6 +564,47 @@ const ChessManager = (function() {
   }
   
   /**
+   * Process a chess move from the opponent (alias for processChessMove)
+   * @param {Object} data - The move data from the server
+   */
+  function processOpponentMove(data) {
+    // Check if we're receiving the move object or a wrapper with move and fen
+    const moveData = data.move ? data.move : data;
+    const fen = data.fen || null;
+    
+    if (fen) {
+      // If we got a FEN string, attach it to the move data for potential recovery
+      moveData.fen = fen;
+    }
+    
+    // Call the existing processChessMove function
+    processChessMove(moveData);
+    
+    // Update the board to show the move
+    updateBoard();
+    
+    // Check for game end conditions
+    checkGameEndConditions();
+  }
+  
+  /**
+   * Check for game end conditions like checkmate and stalemate
+   */
+  function checkGameEndConditions() {
+    if (!chessEngine) return;
+    
+    if (chessEngine.in_checkmate()) {
+      const winner = chessEngine.turn() === 'w' ? 'black' : 'white';
+      GameState.declareWinner(winner, 'checkmate');
+    } else if (chessEngine.in_stalemate() || 
+               chessEngine.in_draw() || 
+               chessEngine.in_threefold_repetition() || 
+               chessEngine.insufficient_material()) {
+      GameState.declareWinner(null, 'draw');
+    }
+  }
+  
+  /**
    * Get a human-readable name for a piece
    * @param {string} pieceCode - The piece code (p, n, b, r, q, k)
    * @returns {string} The human-readable piece name
@@ -655,53 +696,44 @@ const ChessManager = (function() {
         debugLog(`Setting new FEN with corrected turn: ${newFEN}`);
         
         // Try to validate and load the new FEN
-        if (chessEngine.validate_fen(newFEN).valid) {
-          chessEngine.load(newFEN);
-          debugLog('Successfully corrected chess engine turn');
-        } else {
-          debugLog('Could not fix turn mismatch - FEN validation failed, resetting board');
-          chessEngine.reset();
+        try {
+          if (chessEngine.validate_fen(newFEN).valid) {
+            chessEngine.load(newFEN);
+            debugLog('Successfully updated FEN with correct turn');
+          } else {
+            // Don't reset the board, just log the error
+            debugLog('Generated FEN is invalid, keeping current state');
+          }
+        } catch (error) {
+          debugLog('Error validating FEN, keeping current state:', error);
         }
       }
       
-      // Validate FEN string - if it's invalid, reset the board
-      if (!chessEngine.validate_fen(chessEngine.fen()).valid) {
-        debugLog('Invalid FEN detected, resetting to starting position');
-        chessEngine.reset();
-      }
+      // Get legal moves
+      const legalMoves = chessEngine.moves({ verbose: true });
+      debugLog('Available legal moves:', legalMoves);
       
-      // Log available legal moves for debugging
-      debugLog('Available legal moves:', chessEngine.moves({ verbose: true }));
-      
-      // Check if the board container exists
-      const boardContainer = document.getElementById('chess-board');
-      if (!boardContainer) {
-        debugLog('Chess board container not found during refresh');
-        return;
-      }
-      
-      // If the chessboard exists, update its position
+      // Update the chessboard display
+      debugLog('Updating chessboard position');
       if (chessboard) {
-        debugLog('Updating chessboard position');
-        
-        // Get the current position from the chess engine
-        const currentPosition = chessEngine.fen();
-        
-        // Update the position on the board
-        chessboard.position(currentPosition, false); // false means no animation
-      } else {
-        debugLog('Chessboard not initialized, setting up a new board');
-        setupBoard();
+        chessboard.position(chessEngine.fen());
       }
       
-      // If it's the player's turn, check if they can make any moves with their current resources
+      // If it's the player's turn during the chess phase, check if they can make any moves
       if (isPlayerTurn && GameState.getCurrentGamePhase() === 'chess') {
+        debugLog('Checking if player can make any legal moves with current resources');
         checkIfPlayerCanMakeAnyMoves();
       }
       
       debugLog('Chess board refresh complete');
+      
+      // Clear any previous selections
+      clearSelection();
+      
+      return true;
     } catch (error) {
       console.error('Error refreshing chess board:', error);
+      return false;
     }
   }
   
@@ -770,9 +802,11 @@ const ChessManager = (function() {
     setupBoard,
     updateBoard,
     processChessMove,
+    processOpponentMove,
     showMoveCosts,
     refreshBoard,
     checkIfPlayerCanMakeAnyMoves,
+    checkGameEndConditions,
     getCurrentFEN: function() {
       if (!chessEngine) {
         console.error('Chess engine not initialized when getting FEN');

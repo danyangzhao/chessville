@@ -18,6 +18,15 @@ const FarmManager = (function() {
     }
   };
   
+  // Plot states enum
+  const PLOT_STATE = {
+    EMPTY: 'empty',
+    PLANTED: 'planted',
+    GROWING: 'growing',
+    READY: 'ready',
+    LOCKED: 'locked'
+  };
+  
   /**
    * Initialize the Farm Manager
    * @returns {boolean} True if initialization was successful

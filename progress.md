@@ -1066,3 +1066,82 @@ return {
 3. Resolving edge cases in the game flow
 4. Improving performance for mobile devices
 5. Expanding crop variety and gameplay options
+
+## Latest Updates (2025-03-02)
+
+### Fixed Critical Bugs
+
+#### Issue: Missing PLOT_STATE Enum in Farm Manager
+**Status:** Fixed
+**Description:** Farm plots were not being properly processed due to a ReferenceError: `PLOT_STATE is not defined`.
+**Diagnosis:** The farm-manager.js file was referencing a PLOT_STATE enum that wasn't defined.
+**Solution:** Added the missing PLOT_STATE enum to the farm-manager.js file:
+```javascript
+// Plot states enum
+const PLOT_STATE = {
+  EMPTY: 'empty',
+  PLANTED: 'planted',
+  GROWING: 'growing',
+  READY: 'ready',
+  LOCKED: 'locked'
+};
+```
+**Date Fixed:** 2025-03-02
+
+#### Issue: Missing processOpponentMove Function
+**Status:** Fixed
+**Description:** Processing chess moves from the opponent was failing with error: `ChessManager.processOpponentMove is not a function`.
+**Diagnosis:** The socket-manager.js was calling `ChessManager.processOpponentMove()` but this function didn't exist in the ChessManager module.
+**Solution:** Added the processOpponentMove function to chess-manager.js, which acts as a wrapper for the existing processChessMove function:
+```javascript
+function processOpponentMove(data) {
+  // Check if we're receiving the move object or a wrapper with move and fen
+  const moveData = data.move ? data.move : data;
+  const fen = data.fen || null;
+  
+  if (fen) {
+    // If we got a FEN string, attach it to the move data for potential recovery
+    moveData.fen = fen;
+  }
+  
+  // Call the existing processChessMove function
+  processChessMove(moveData);
+  
+  // Update the board to show the move
+  updateBoard();
+  
+  // Check for game end conditions
+  checkGameEndConditions();
+}
+```
+**Date Fixed:** 2025-03-02
+
+#### Issue: Chess Board Resetting After Moves
+**Status:** Fixed
+**Description:** Chess moves were being made but the chess board was resetting, losing the move history.
+**Diagnosis:** The refreshBoard function in chess-manager.js was unnecessarily resetting the board when there was a mismatch between the chess engine turn and the game state turn.
+**Solution:** Improved the FEN state handling in the refreshBoard function to prevent unnecessary resets:
+1. Modified the code to keep the current state when validation fails instead of resetting
+2. Added better error handling around FEN validation
+3. Simplified the board updating process
+```javascript
+// Try to validate and load the new FEN
+try {
+  if (chessEngine.validate_fen(newFEN).valid) {
+    chessEngine.load(newFEN);
+    debugLog('Successfully updated FEN with correct turn');
+  } else {
+    // Don't reset the board, just log the error
+    debugLog('Generated FEN is invalid, keeping current state');
+  }
+} catch (error) {
+  debugLog('Error validating FEN, keeping current state:', error);
+}
+```
+**Date Fixed:** 2025-03-02
+
+### Next Steps
+- Continue testing to ensure all game mechanics function correctly
+- Implement end-game conditions and victory/defeat screens
+- Add farm display improvements and visual feedback
+- Create a tutorial for new players
