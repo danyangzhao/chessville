@@ -169,44 +169,8 @@ const SocketManager = (function() {
     });
     
     socket.on('chess-move', (move) => {
-      console.log('Received chess move from opponent:', move);
-      
-      // Process the move to update the engine state
-      ChessManager.processChessMove(move);
-      
-      // Always refresh the board to ensure proper synchronization
-      setTimeout(() => {
-        console.log('Refreshing board after receiving opponent move');
-        
-        // Ensure the game state turn is correctly set before refreshing board
-        // This will help synchronize the chess engine's internal state with the game state
-        const currentPlayerColor = GameState.getPlayerColor();
-        const opponentColor = currentPlayerColor === 'white' ? 'black' : 'white';
-        
-        // If we just received a move from the opponent, it should now be our turn
-        console.log(`Setting current turn to ${currentPlayerColor} after opponent's move`);
-        GameState.setCurrentTurn(currentPlayerColor);
-        
-        // Now refresh the board with the corrected game state
-        ChessManager.refreshBoard();
-        
-        // Update UI
-        UIManager.updateTurnIndicator();
-      }, 200); // Small delay to ensure everything is ready
-      
-      // Log the board state for debugging
-      if (move.fen) {
-        setTimeout(() => {
-          const currentFEN = ChessManager.getCurrentFEN();
-          console.log(`Received FEN from opponent: ${move.fen}`);
-          console.log(`Local engine FEN after move: ${currentFEN}`);
-          
-          // If there's a mismatch, log a warning
-          if (currentFEN !== move.fen) {
-            console.warn('FEN mismatch detected after applying move');
-          }
-        }, 300);
-      }
+      // Use our enhanced processChessMove function
+      processChessMove(move);
     });
     
     socket.on('farm-action', (action) => {
@@ -273,41 +237,30 @@ const SocketManager = (function() {
         
         // ENHANCED TURN CHANGE DETECTION AND PROCESSING
         if (turnHasChanged) {
-          console.log('-------------------------');
-          console.log('TURN HAS CHANGED - PROCESSING FARM PLOTS');
-          console.log('Previous turn: ' + previousTurn + ', New turn: ' + data.currentTurn);
-          console.log('-------------------------');
+          console.log('Turn has changed - PROCESSING FARM PLOTS - Third call point');
           
-          // Explicitly verify FarmManager exists and can be called
+          // Enhanced error checking and detailed logging
           if (typeof FarmManager === 'undefined') {
-            console.error('ERROR: FarmManager is undefined, cannot process farm plots');
+            console.error('FarmManager is undefined, cannot process farm plots');
           } else if (typeof FarmManager.processTurn !== 'function') {
-            console.error('ERROR: FarmManager.processTurn is not a function, cannot process farm plots');
+            console.error('FarmManager.processTurn is not a function, cannot process farm plots');
           } else {
             try {
-              console.log('Calling FarmManager.processTurn() to advance crops and auto-harvest');
-              // This should advance crops and auto-harvest ready ones
-              FarmManager.processTurn();
-              console.log('FarmManager.processTurn() completed successfully');
-            } catch (error) {
-              console.error('ERROR during FarmManager.processTurn():', error);
+              // Log farm state before processing
+              console.log('Farm state BEFORE processing turn in gameStateUpdate:', 
+                typeof FarmManager.getState === 'function' ? 
+                JSON.stringify(FarmManager.getState()) : 'getState not available');
               
-              // Try to recover by updating display at least
-              try {
-                if (typeof FarmManager.updateFarmDisplay === 'function') {
-                  FarmManager.updateFarmDisplay();
-                  console.log('Recovered by updating farm display after error');
-                }
-              } catch (displayError) {
-                console.error('ERROR updating farm display during recovery:', displayError);
-              }
-            }
-            
-            // Ensure UI is updated after farm processing
-            try {
-              UIManager.updateResourceDisplay();
-            } catch (uiError) {
-              console.error('ERROR updating resource display after farm processing:', uiError);
+              // Process farm turn
+              FarmManager.processTurn();
+              console.log('Successfully processed farm turn in gameStateUpdate');
+              
+              // Log farm state after processing
+              console.log('Farm state AFTER processing turn in gameStateUpdate:', 
+                typeof FarmManager.getState === 'function' ? 
+                JSON.stringify(FarmManager.getState()) : 'getState not available');
+            } catch (error) {
+              console.error('Error processing farm turn in gameStateUpdate:', error);
             }
           }
         }
@@ -349,29 +302,8 @@ const SocketManager = (function() {
     
     // Add handler for direct turn notification
     socket.on('your-turn', (data) => {
-      console.log('Received direct turn notification:', data);
-      
-      // Set current phase
-      if (data.phase) {
-        GameState.setCurrentGamePhase(data.phase);
-        GameState.resetFarmActionTaken(); // Reset farm action flag for new turn
-        UIManager.updateGamePhaseIndicator(data.phase);
-      }
-      
-      // Set the current turn to the player's color
-      const playerColor = GameState.getPlayerColor();
-      console.log(`Setting current turn to ${playerColor} based on your-turn event`);
-      GameState.setCurrentTurn(playerColor);
-      
-      // Always refresh the chess board to ensure it's in sync when turn changes,
-      // regardless of current phase
-      setTimeout(() => {
-        console.log('Refreshing chess board on turn change');
-        ChessManager.refreshBoard();
-        
-        // Update UI
-        UIManager.updateTurnIndicator();
-      }, 200); // Small delay to ensure everything is ready
+      // Call our enhanced processYourTurn function
+      processYourTurn(data);
       
       // Show prominent notification to player
       if (data.phase === 'farming') {
@@ -553,6 +485,111 @@ const SocketManager = (function() {
       winner: winner,
       reason: reason
     });
+  }
+  
+  /**
+   * Processes a turn change notification
+   * @param {Object} data - The turn change data
+   */
+  function processYourTurn(data) {
+    console.log('Received direct turn notification:', data);
+    
+    if (data.color) {
+      console.log(`Setting current turn to ${data.color} based on your-turn event`);
+      GameState.setCurrentTurn(data.color);
+      
+      // IMPORTANT: Process farm turns when turn changes
+      console.log('Turn has changed - EXPLICITLY CALLING FarmManager.processTurn()');
+      
+      // Enhanced error checking and logging
+      if (typeof FarmManager === 'undefined') {
+        console.error('FarmManager is undefined, cannot process farm plots');
+      } else if (typeof FarmManager.processTurn !== 'function') {
+        console.error('FarmManager.processTurn is not a function, cannot process farm plots');
+      } else {
+        // Log farm state before processing
+        console.log('Farm state BEFORE processing turn:', 
+          typeof FarmManager.getState === 'function' ? 
+          JSON.stringify(FarmManager.getState()) : 'getState not available');
+        
+        // Process the turn and catch any errors
+        try {
+          FarmManager.processTurn();
+          console.log('Successfully processed farm turn');
+        } catch (error) {
+          console.error('Error processing farm turn:', error);
+        }
+        
+        // Log farm state after processing
+        console.log('Farm state AFTER processing turn:', 
+          typeof FarmManager.getState === 'function' ? 
+          JSON.stringify(FarmManager.getState()) : 'getState not available');
+      }
+      
+      // Refresh the chess board when the turn changes
+      console.log('Refreshing chess board on turn change');
+      ChessManager.refreshBoard();
+    }
+  }
+  
+  /**
+   * Processes a chess move from the opponent
+   * @param {Object} data - The chess move data
+   */
+  function processChessMove(data) {
+    console.log('Received chess move from opponent:', data);
+    
+    try {
+      ChessManager.processOpponentMove(data);
+      
+      // After processing opponent's move, refresh the board and set the current turn
+      console.log('Refreshing board after receiving opponent move');
+      
+      // IMPORTANT: Also process farm turns after opponent's move
+      console.log('Turn has changed after opponent move - CALLING FarmManager.processTurn()');
+      if (typeof FarmManager !== 'undefined' && typeof FarmManager.processTurn === 'function') {
+        try {
+          // Log farm state before processing
+          console.log('Farm state BEFORE processing turn after opponent move:', 
+            typeof FarmManager.getState === 'function' ? 
+            JSON.stringify(FarmManager.getState()) : 'getState not available');
+          
+          FarmManager.processTurn();
+          console.log('Successfully processed farm turn after opponent move');
+          
+          // Log farm state after processing
+          console.log('Farm state AFTER processing turn after opponent move:', 
+            typeof FarmManager.getState === 'function' ? 
+            JSON.stringify(FarmManager.getState()) : 'getState not available');
+        } catch (error) {
+          console.error('Error processing farm turn after opponent move:', error);
+        }
+      }
+      
+      // Update turn after opponent's move
+      console.log('Setting current turn to ' + GameState.getPlayerColor() + ' after opponent\'s move');
+      GameState.setCurrentTurn(GameState.getPlayerColor());
+      
+      // Now refresh the board with the corrected game state
+      ChessManager.refreshBoard();
+      
+      // Update UI
+      UIManager.updateTurnIndicator();
+      
+      // Log the board state for debugging
+      if (data.fen) {
+        const currentFEN = ChessManager.getCurrentFEN();
+        console.log(`Received FEN from opponent: ${data.fen}`);
+        console.log(`Local engine FEN after move: ${currentFEN}`);
+        
+        // If there's a mismatch, log a warning
+        if (currentFEN !== data.fen) {
+          console.warn('FEN mismatch detected after applying move');
+        }
+      }
+    } catch (error) {
+      console.error('Error processing chess move:', error);
+    }
   }
   
   // Public API
