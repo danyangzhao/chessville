@@ -500,7 +500,7 @@ const FarmManager = (function() {
       
       let harvestedCrops = 0;
       
-      // Process white player plots
+      // Process white player plots ONLY if it's white's turn and farming phase
       console.log('Processing WHITE player plots:');
       farms.white.plots.forEach(plot => {
         // First check if the plot is ready and auto-harvest if needed
@@ -511,8 +511,8 @@ const FarmManager = (function() {
             harvestedCrops++;
           }
         } 
-        // Otherwise process the plot for growth
-        else if (plot.state === PLOT_STATE.PLANTED) {
+        // Only process white's plots for growth if it's white's turn
+        else if (plot.state === PLOT_STATE.PLANTED && currentTurn === 'white') {
           processSinglePlot(plot);
         }
         
@@ -526,7 +526,7 @@ const FarmManager = (function() {
         }
       });
       
-      // Process black player plots
+      // Process black player plots ONLY if it's black's turn and farming phase
       console.log('Processing BLACK player plots:');
       farms.black.plots.forEach(plot => {
         // First check if the plot is ready and auto-harvest if needed
@@ -537,8 +537,8 @@ const FarmManager = (function() {
             harvestedCrops++;
           }
         } 
-        // Otherwise process the plot for growth
-        else if (plot.state === PLOT_STATE.PLANTED) {
+        // Only process black's plots for growth if it's black's turn
+        else if (plot.state === PLOT_STATE.PLANTED && currentTurn === 'black') {
           processSinglePlot(plot);
         }
         

@@ -255,11 +255,15 @@ const GameState = (function() {
       chess: false
     };
     
-    // Process farm plots - call this before the next turn starts
-    // This will advance all growing crops and auto-harvest ready ones
-    if (typeof FarmManager !== 'undefined' && FarmManager.processTurn) {
-      console.log('Processing farm plots during turn change');
+    // Check if it's the player's turn after the turn change
+    const isPlayersTurn = isPlayerTurn();
+    
+    // Process farm plots only if it's the player's turn
+    if (isPlayersTurn && typeof FarmManager !== 'undefined' && FarmManager.processTurn) {
+      console.log('Processing farm plots during turn change - it is the player\'s turn');
       FarmManager.processTurn();
+    } else {
+      console.log('Not processing farm plots during turn change - it is the opponent\'s turn');
     }
     
     // Reset to farming phase
@@ -274,7 +278,7 @@ const GameState = (function() {
     UIManager.updateTurnIndicator();
     
     // If it's now my turn, show a notification
-    if (isPlayerTurn()) {
+    if (isPlayersTurn) {
       showMessage('YOUR TURN - Farming Phase!', 5000);
     }
   }

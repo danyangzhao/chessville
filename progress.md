@@ -835,7 +835,7 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 1. Players now reliably receive wheat when crops are ready
 2. The farm system is more robust against data inconsistencies
 3. If one method fails, multiple fallback mechanisms ensure players still receive their wheat
-4. Enhanced logging provides better visibility for debugging
+4. Enhanced logging makes debugging easier
 5. The system is now more tolerant of unexpected states or errors
 
 **Date Fixed:** 2025-03-03
@@ -942,43 +942,6 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 - Checkmark indicators show when crops are ready
 - More robust error handling prevents cascading failures
 - Detailed logging makes debugging easier
-
-**Date Fixed:** March 4, 2025
-
-## Current Development Focus:
-- Further enhance mobile responsiveness
-- Quality-of-life improvements
-- Performance optimization
-- New crop types
-- Tutorial improvements
-
-## Connection Errors After Auto-Harvesting Updates (March 4, 2025)
-
-**Issue:** Connection errors were occurring after implementing the auto-harvesting improvements and turns-to-harvest counters.
-
-**Status:** Fixed
-
-**Description:** After implementing the auto-harvesting improvements, users were experiencing errors when trying to connect to a game. The error logs showed:
-- `farm-manager.js:1145 Uncaught ReferenceError: getState is not defined`
-- `client-core.js:61 Critical initialization error: ReferenceError: FarmManager is not defined`
-- `socket-manager.js:394 Socket not initialized`
-
-**Diagnosis:** These errors were caused by:
-1. The `getState` function was referenced in the `processTurn` function but was missing from the actual implementation.
-2. There was a mismatch between the functions exposed in the public API and those referenced in the code.
-3. The socket initialization was failing due to dependency issues.
-
-**Solution:**
-1. Added the missing `getState` function to the FarmManager module to expose farm state for debugging.
-2. Created an alias for the initialize function as initializeModule for backward compatibility.
-3. Updated the public API to expose all required functions including autoHarvestCrop and updatePlotDisplay.
-4. Added error handling and re-initialization logic to the SocketManager's joinRoom function to prevent failures when the socket is not properly initialized.
-
-**Benefits:**
-- Game connects properly without initialization errors.
-- The auto-harvesting improvements and turns-to-harvest counters work correctly.
-- Added error recovery mechanisms to prevent cascading failures.
-- Improved robustness of the initialization sequence.
 
 **Date Fixed:** March 4, 2025
 
@@ -1180,3 +1143,31 @@ function handlePlantButtonClick(event) {
 - Ensured proper module communication between Farm Manager and UI Manager
 
 **Date Fixed:** Current Date
+
+## Implemented Turn Counter Fix (Current Date)
+
+Following the diagnosis of the crop growth turn counter issue, we've successfully implemented the fix across several key files:
+
+1. **farm-manager.js**:
+   - Modified the `processTurn` function to only process a player's plots when it's their own turn
+   - Updated the condition to only decrement `turnsToHarvest` for white plots when it's white's turn and for black plots when it's black's turn
+   - Kept the auto-harvesting logic intact for mature crops
+
+2. **socket-manager.js**:
+   - Updated `processYourTurn` to only process farm plots when it's actually the player's turn, not the opponent's
+   - Modified `processChessMove` to correctly handle the turn transition after an opponent's move
+   - Added clearer logging to distinguish between processing during player's vs. opponent's turns
+
+3. **game-state.js**:
+   - Updated `processTurnChange` to only call FarmManager.processTurn when it's the player's turn
+   - Added additional logging to make the turn processing more transparent
+
+These changes ensure that crop growth progresses at the correct rate, with each "turn" representing a complete cycle back to the same player, rather than counting both players' turns. Players should now see their crops mature after the intended number of complete game turns.
+
+**Results**:
+- Crops with 2-turn growth cycles now take 2 complete game cycles to mature
+- Turn counting is consistent with player expectations
+- The auto-harvesting system works correctly when crops mature
+- Overall game balance is improved
+
+**Date Implemented:** Current Date
