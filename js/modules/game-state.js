@@ -354,8 +354,15 @@ const GameState = (function() {
       console.error(`Invalid player color: ${color}`);
       return 0;
     }
-    
     return resources[color].wheat;
+  }
+  
+  /**
+   * Get all resources for debugging and emergency fixes
+   * @returns {Object} The resources object
+   */
+  function getResources() {
+    return resources;
   }
   
   /**
@@ -444,6 +451,7 @@ const GameState = (function() {
     resetFarmActionTaken,
     updateWheat,
     getWheat,
+    getResources,
     recordCapture,
     getCapturedPieces,
     declareWinner,

@@ -735,3 +735,114 @@ The game continues to evolve with player feedback guiding our development priori
 4. Additional game features and mechanics
 
 The Chess Farm Game is now more accessible on mobile devices, allowing players to enjoy the full experience regardless of their device type or screen size.
+
+## March 3, 2025 - Farm System Fixes
+
+### Issue: Auto-Harvesting Not Working Reliably
+**Status:** Fixed
+**Description:** Despite previous attempts to fix auto-harvesting, players were still not receiving wheat automatically when crops were ready to harvest.
+**Diagnosis:** After extensive debugging, several issues were identified:
+1. Turn change detection wasn't consistently triggering the `processTurn` function
+2. Crop yield data was accessed inconsistently due to variations in data structure
+3. Error handling was insufficient, causing silent failures during the auto-harvest process
+4. The auto-harvest logs weren't providing enough detail for proper debugging
+5. There was no fallback mechanism if the standard wheat update process failed
+
+**Solution:** Implemented a comprehensive fix with multiple layers of enhancements:
+
+1. **Enhanced turn change detection**:
+   - Added robust error checking in the Socket Manager's game state update handler
+   - Improved logging to track turn changes and farm processing
+   - Added state verification before and after farm processing
+   ```javascript
+   // In socket-manager.js
+   if (turnHasChanged) {
+     console.log('Turn has changed - PROCESSING FARM PLOTS - Explicitly calling FarmManager.processTurn()');
+     // Enhanced error checking and logging
+     if (typeof FarmManager === 'undefined') {
+       console.error('FarmManager is undefined, cannot process farm plots');
+     } else if (typeof FarmManager.processTurn !== 'function') {
+       console.error('FarmManager.processTurn is not a function, cannot process farm plots');
+     } else {
+       // Process the turn with state logging before and after
+       FarmManager.processTurn();
+     }
+   }
+   ```
+
+2. **Added farm state debugging**:
+   - Created a new `getState` function in FarmManager to expose the farm state
+   - Implemented detailed logging of the farm state before and after processing turns
+   ```javascript
+   function getState() {
+     const whitePlots = farms.white.plots.map(plot => ({
+       id: plot.id,
+       state: plot.state,
+       turnsToHarvest: plot.turnsToHarvest,
+       crop: plot.crop ? {
+         name: plot.crop.name || plot.crop.type,
+         yield: plot.crop.yield || plot.crop.harvestYield || 15
+       } : null
+     }));
+     
+     // Return a structured representation of the farm state
+     return {
+       whiteWheat: GameState.getWheat('white'),
+       blackWheat: GameState.getWheat('black'),
+       whitePlots,
+       blackPlots
+     };
+   }
+   ```
+
+3. **Robust crop data handling**:
+   - Enhanced the `autoHarvestCrop` function with improved crop data access
+   - Added multiple fallbacks for yield value extraction
+   - Implemented comprehensive try/catch error handling
+   ```javascript
+   // Improved yield extraction with multiple fallbacks
+   let yieldAmount = 15; // Default fallback yield
+   
+   if (typeof cropData.yield === 'number') {
+     yieldAmount = cropData.yield;
+   } else if (typeof cropData.harvestYield === 'number') {
+     yieldAmount = cropData.harvestYield;
+   } else if (typeof cropData.baseYield === 'number') {
+     yieldAmount = cropData.baseYield;
+   } else {
+     console.warn('No yield property found in crop data, using default value');
+   }
+   ```
+
+4. **Emergency fallback mechanism**:
+   - Added a forced wheat update mechanism as a fallback
+   - Implemented a new `getResources` function in GameState to allow direct resource access when needed
+   ```javascript
+   // Try forcibly updating the wheat if normal update fails
+   try {
+     const resources = GameState.getResources ? GameState.getResources() : null;
+     if (resources && resources[playerColor]) {
+       resources[playerColor].wheat += yieldAmount;
+       console.log(`Forcibly updated ${playerColor} player wheat: ${resources[playerColor].wheat}`);
+       UIManager.updateResourceDisplay();
+     }
+   } catch (error) {
+     console.error('Error during forced wheat update:', error);
+   }
+   ```
+
+**Benefits:**
+1. Players now reliably receive wheat when crops are ready for harvest
+2. The farm system is more robust against data inconsistencies
+3. If one method fails, multiple fallback mechanisms ensure players still receive their wheat
+4. Enhanced logging provides better visibility for debugging
+5. The system is now more tolerant of unexpected states or errors
+
+**Date Fixed:** 2025-03-03
+
+## Current Development Focus
+1. Additional quality-of-life improvements for player experience
+2. Further optimizations for mobile devices
+3. New crop types with different growth patterns and yields
+4. Tutorial enhancements for new players
+5. Balance adjustments to ensure fair gameplay

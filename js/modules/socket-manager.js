@@ -271,11 +271,36 @@ const SocketManager = (function() {
         const turnHasChanged = previousTurn !== data.currentTurn;
         console.log(`Turn has changed: ${turnHasChanged} (from ${previousTurn} to ${data.currentTurn})`);
         
-        // Process farm plots when turn changes
+        // ENHANCED TURN CHANGE DETECTION AND PROCESSING
         if (turnHasChanged) {
-          console.log('Turn has changed, processing farm plots');
-          if (typeof FarmManager !== 'undefined' && FarmManager.processTurn) {
+          console.log('Turn has changed - PROCESSING FARM PLOTS - Explicitly calling FarmManager.processTurn()');
+          
+          // Make sure FarmManager exists and has the processTurn function
+          if (typeof FarmManager === 'undefined') {
+            console.error('FarmManager is undefined, cannot process farm plots');
+          } else if (typeof FarmManager.processTurn !== 'function') {
+            console.error('FarmManager.processTurn is not a function, cannot process farm plots');
+          } else {
+            // Log farm state before processing
+            console.log('Farm state before processing turn:');
+            try {
+              const farmState = FarmManager.getState ? FarmManager.getState() : 'Farm state not available';
+              console.log(farmState);
+            } catch (error) {
+              console.error('Error getting farm state:', error);
+            }
+            
+            // Process the turn - this should advance crops and auto-harvest ready ones
             FarmManager.processTurn();
+            
+            // Log farm state after processing
+            console.log('Farm state after processing turn:');
+            try {
+              const farmState = FarmManager.getState ? FarmManager.getState() : 'Farm state not available';
+              console.log(farmState);
+            } catch (error) {
+              console.error('Error getting farm state:', error);
+            }
           }
         }
         
@@ -283,7 +308,14 @@ const SocketManager = (function() {
         if (turnHasChanged && GameState.isPlayerTurn()) {
           console.log('It is now this player\'s turn (from gameStateUpdate)');
           GameState.setCurrentGamePhase('farming');
-          GameState.resetFarmActionTaken(); // Reset farm action flag for new turn
+          
+          // Reset farm action flag explicitly
+          if (typeof GameState.resetFarmActionTaken === 'function') {
+            GameState.resetFarmActionTaken();
+          } else {
+            console.error('GameState.resetFarmActionTaken is not a function');
+          }
+          
           UIManager.updateGamePhaseIndicator('farming');
           
           // Show notification
