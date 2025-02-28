@@ -271,6 +271,14 @@ const SocketManager = (function() {
         const turnHasChanged = previousTurn !== data.currentTurn;
         console.log(`Turn has changed: ${turnHasChanged} (from ${previousTurn} to ${data.currentTurn})`);
         
+        // Process farm plots when turn changes
+        if (turnHasChanged) {
+          console.log('Turn has changed, processing farm plots');
+          if (typeof FarmManager !== 'undefined' && FarmManager.processTurn) {
+            FarmManager.processTurn();
+          }
+        }
+        
         // Reset game phase to farming at the beginning of a turn
         if (turnHasChanged && GameState.isPlayerTurn()) {
           console.log('It is now this player\'s turn (from gameStateUpdate)');

@@ -255,6 +255,13 @@ const GameState = (function() {
       chess: false
     };
     
+    // Process farm plots - call this before the next turn starts
+    // This will advance all growing crops and auto-harvest ready ones
+    if (typeof FarmManager !== 'undefined' && FarmManager.processTurn) {
+      console.log('Processing farm plots during turn change');
+      FarmManager.processTurn();
+    }
+    
     // Reset to farming phase
     setCurrentGamePhase('farming');
     
@@ -287,6 +294,15 @@ const GameState = (function() {
     }
     
     farmActionTaken = true;
+    return true;
+  }
+  
+  /**
+   * Reset the farm action taken flag
+   */
+  function resetFarmActionTaken() {
+    farmActionTaken = false;
+    console.log('Farm action flag reset for new turn');
     return true;
   }
   
@@ -425,6 +441,7 @@ const GameState = (function() {
     processTurnChange,
     registerFarmAction,
     hasFarmActionBeenTaken,
+    resetFarmActionTaken,
     updateWheat,
     getWheat,
     recordCapture,

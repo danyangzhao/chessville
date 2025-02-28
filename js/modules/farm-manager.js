@@ -535,6 +535,9 @@ const FarmManager = (function() {
         if (plot.turnsToHarvest <= 0) {
           plot.state = 'ready';
           console.log(`Crop in plot ${plot.id} is ready for harvest`);
+          
+          // Automatically harvest crops that are ready for white player
+          autoHarvestCrop(plot, 'white');
         }
       }
     });
@@ -550,12 +553,65 @@ const FarmManager = (function() {
         if (plot.turnsToHarvest <= 0) {
           plot.state = 'ready';
           console.log(`Crop in plot ${plot.id} is ready for harvest`);
+          
+          // Automatically harvest crops that are ready for black player
+          autoHarvestCrop(plot, 'black');
         }
       }
     });
     
     // Update the farm display
     updateFarmDisplay();
+  }
+  
+  /**
+   * Automatically harvest a crop that is ready
+   * @param {Object} plot - The plot object
+   * @param {string} playerColor - The color of the player who owns the plot
+   */
+  function autoHarvestCrop(plot, playerColor) {
+    if (plot.state !== 'ready' || !plot.crop) {
+      return; // Not ready for harvest or no crop data
+    }
+    
+    console.log(`Auto-harvesting crop from plot ${plot.id} for ${playerColor}`);
+    
+    // Get the crop data
+    const cropData = plot.crop;
+    
+    // Make sure we have a valid yield value from the crop
+    const yieldAmount = cropData.yield || cropData.harvestYield || 15; // Default to 15 if missing
+    
+    // Update player's wheat
+    const previousWheat = GameState.getWheat(playerColor);
+    
+    // Add logging to debug auto-harvest
+    console.log(`Before auto-harvest: Player ${playerColor} has ${previousWheat} wheat`);
+    console.log(`Auto-harvesting ${cropData.name || cropData.type} with yield ${yieldAmount}`);
+    
+    // Update wheat with yield amount
+    if (!GameState.updateWheat(playerColor, yieldAmount)) {
+      console.error(`Failed to update wheat for player ${playerColor} during auto-harvest`);
+      return;
+    }
+    
+    // Verify the wheat was actually added
+    const newWheat = GameState.getWheat(playerColor);
+    console.log(`After auto-harvest: Player ${playerColor} has ${newWheat} wheat (expected: ${previousWheat + yieldAmount})`);
+    
+    // Clear the plot
+    plot.state = 'empty';
+    plot.crop = null;
+    plot.turnsToHarvest = 0;
+    
+    console.log(`Auto-harvested ${cropData.name || cropData.type} from plot ${plot.id}, ${playerColor} gained ${yieldAmount} wheat`);
+    
+    // Send the update to the server
+    if (typeof SocketManager !== 'undefined' && SocketManager.sendFarmUpdate) {
+      SocketManager.sendFarmUpdate('harvest', {
+        plotId: plot.id
+      });
+    }
   }
   
   /**

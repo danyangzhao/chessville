@@ -592,9 +592,58 @@ The Chess Farm Game has seen significant improvements to both its chess and farm
 
 ### Farming Improvements
 - ✅ Fixed issue with crops not yielding wheat when harvested
+- ✅ Implemented automatic harvesting system to ensure players receive wheat on turn changes
 - ✅ Improved robustness of crop data handling with fallbacks for missing properties
 - ✅ Added comprehensive debug logging to track farm state changes
 - ✅ Ensured farm display updates consistently after actions
+
+### Issue: Auto-Harvesting Not Working for Ready Crops
+**Status:** Fixed
+**Description:** Players were not receiving wheat automatically when crops were ready for harvest at the end of their turn duration.
+**Diagnosis:** The farming system correctly tracked crop growth and marked them as ready, but there was no mechanism to automatically harvest them. Players had to manually click the harvest button for each ready crop.
+**Solution:** Implemented an auto-harvesting system with the following improvements:
+1. Added an `autoHarvestCrop` function that automatically harvests crops that are ready and awards wheat to the player
+2. Modified the `processTurn` function to call `autoHarvestCrop` when crops become ready
+3. Ensured `processTurn` is called at appropriate points during turn transitions
+```javascript
+// Auto-harvest ready crops when they mature
+function autoHarvestCrop(plot, playerColor) {
+  if (plot.state !== 'ready' || !plot.crop) {
+    return; // Not ready for harvest or no crop data
+  }
+  
+  // Make sure we have a valid yield value from the crop
+  const yieldAmount = cropData.yield || cropData.harvestYield || 15;
+  
+  // Update player's wheat
+  const previousWheat = GameState.getWheat(playerColor);
+  
+  // Add logging to debug auto-harvest
+  console.log(`Before auto-harvest: Player ${playerColor} has ${previousWheat} wheat`);
+  
+  // Update wheat with yield amount
+  if (!GameState.updateWheat(playerColor, yieldAmount)) {
+    console.error(`Failed to update wheat for player ${playerColor} during auto-harvest`);
+    return;
+  }
+  
+  // Clear the plot
+  plot.state = 'empty';
+  plot.crop = null;
+  plot.turnsToHarvest = 0;
+}
+```
+4. Added farm processing during turn transitions to ensure crops grow and are harvested correctly
+```javascript
+// Process farm plots when turn changes
+if (turnHasChanged) {
+  console.log('Turn has changed, processing farm plots');
+  if (typeof FarmManager !== 'undefined' && FarmManager.processTurn) {
+    FarmManager.processTurn();
+  }
+}
+```
+**Date Fixed:** 2025-03-02
 
 ### Ongoing Development Focus
 1. Game state synchronization between players
