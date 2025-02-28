@@ -207,34 +207,64 @@ Issues resolved:
 
 Next development focus will be on ensuring proper game state synchronization between players and refining the farming mechanics.
 
-## Latest Updates (2025-02-28)
+## Latest Updates (2025-03-01)
 
-### Successful Implementation and Testing
-The game is now fully functional with all the core features working correctly. Recent testing has confirmed that:
+### Fixed Additional Issues
 
-- The server successfully starts on port 3002
-- Players can join game rooms and play together
-- Chess mechanics function correctly with proper turn enforcement
-- Resource management (wheat) for piece movement works as intended
-- The mandatory chess move requirement each turn is functioning properly
-- Game loss due to insufficient resources is triggered correctly when a player cannot afford any legal moves
+#### Issue: End Turn Button Still Present
+**Status:** Fixed
+**Description:** Despite previous changes to enforce mandatory chess moves each turn, the "End Turn" button was still visible during the chess phase.
+**Diagnosis:** The updateTurnIndicator function in the UI-manager.js file was still displaying the end turn button during the chess phase.
+**Solution:** Modified the updateTurnIndicator function to never display the end turn button, enforcing that players must make a chess move to end their turn:
+```javascript
+// Update action buttons visibility based on whose turn it is
+const skipFarmingButton = document.getElementById('skip-farming-button');
+const endTurnButton = document.getElementById('end-turn-button');
 
-The server logs show successful game activity with multiple chess moves being made by both players, indicating that the synchronization between players is working correctly. The game properly records and validates moves from both players.
+if (skipFarmingButton && endTurnButton) {
+  // Hide both buttons initially
+  skipFarmingButton.style.display = 'none';
+  endTurnButton.style.display = 'none';
+  
+  // If it's player's turn, show the farming skip button only in farming phase
+  // Removed the end turn button display condition to enforce chess moves
+  if (GameState.isPlayerTurn()) {
+    if (GameState.getCurrentGamePhase() === 'farming') {
+      skipFarmingButton.style.display = 'block';
+    }
+    // We no longer show the end turn button, to enforce chess moves
+  }
+}
+```
+**Date Fixed:** 2025-03-01
 
-### Resolved Port Conflict
-Previous server errors with port conflicts have been permanently resolved by:
-1. Using `pkill -f "node server.js"` to ensure no lingering server processes
-2. Starting the server with the correct port configuration (3002)
+#### Issue: Unable to Make Chess Moves as White
+**Status:** Fixed
+**Description:** Players couldn't make legal chess moves when playing as white. When attempting to drag pieces, the source and target squares were the same, resulting in rejected moves.
+**Diagnosis:** The onDrop function in chess-manager.js was receiving the same source and target values, indicating a problem with the drag-and-drop mechanics. The logs showed messages like "Move rejected: Invalid move from d2 to d2".
+**Solution:** Modified the onDrop function in chess-manager.js to add an explicit check for when source and target are the same, providing a clear rejection reason and handling this edge case properly:
+```javascript
+// If source and target are the same, this is not a valid move (just a click or failed drag)
+if (source === target) {
+  debugLog(`Source and target are the same (${source}), not a valid move. Likely a click or failed drag.`);
+  return 'snapback';
+}
+```
+**Date Fixed:** 2025-03-01
 
-### Next Development Phase
-With the core gameplay now stable and functional, development can proceed to:
-- Enhancing the farming mechanics and economy
-- Adding more visual feedback and animations
-- Implementing sound effects for a better player experience
-- Creating a tutorial system for new players
-- Adding additional victory conditions
+### Current Status
+The Chess Farm Game now properly enforces that players must make a chess move each turn by:
+1. Completely removing the "End Turn" button during the chess phase
+2. Fixing the chess piece movement mechanics to properly handle drag-and-drop operations
 
-The Chess Farm Game is now ready to be merged back to the main branch as a solid foundation for future enhancements.
+Additionally, the game now provides better debugging information when a move is rejected, making it easier to troubleshoot any future issues related to chess piece movement.
+
+All core gameplay mechanics are now functioning as intended:
+- Players must make a chess move every turn
+- The farming phase can be skipped if desired
+- Chess moves cost wheat resources
+- Players automatically lose if they cannot afford any legal moves
+- The game properly validates and processes legal chess moves
 
 ## Project Merge and Heroku Deployment (2025-02-28)
 

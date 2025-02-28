@@ -219,6 +219,12 @@ const ChessManager = (function() {
     // Log current piece positions for debugging
     debugLog('Current position:', oldPos);
     
+    // If source and target are the same, this is not a valid move (just a click or failed drag)
+    if (source === target) {
+      debugLog(`Source and target are the same (${source}), not a valid move. Likely a click or failed drag.`);
+      return 'snapback';
+    }
+    
     // Do not allow moves if not in chess phase
     if (GameState.getCurrentGamePhase() !== 'chess') {
       debugLog('Move rejected: Not in chess phase');

@@ -222,13 +222,13 @@ const UIManager = (function() {
       skipFarmingButton.style.display = 'none';
       endTurnButton.style.display = 'none';
       
-      // If it's player's turn, show the appropriate button based on phase
+      // If it's player's turn, show the farming skip button only in farming phase
+      // Removed the end turn button display condition to enforce chess moves
       if (GameState.isPlayerTurn()) {
         if (GameState.getCurrentGamePhase() === 'farming') {
           skipFarmingButton.style.display = 'block';
-        } else if (GameState.getCurrentGamePhase() === 'chess') {
-          endTurnButton.style.display = 'block';
         }
+        // We no longer show the end turn button, to enforce chess moves
       }
     }
   }
