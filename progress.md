@@ -1126,3 +1126,93 @@ return {
 - The game economy functions as designed, with captures providing both wheat and potential plot unlocks
 
 **Date Fixed:** 2025-03-02
+
+## Automated Farm Plot Unlocking and Crop Turn Counter Fix (2025-03-03)
+
+### Issue 1: Manual Farm Plot Unlocking
+**Status:** Fixed
+
+**Description:** When a player captured enough pieces to unlock a farm plot, the plot would become "unlockable" but required manual intervention by the player to click an "Unlock" button. This added unnecessary friction to gameplay and disrupted the flow of the game.
+
+**Diagnosis:** The code was designed to track captures and make plots "unlockable" rather than immediately unlocking them. This was indicated by the `checkUnlockPlot` function which only changed the plot state to 'unlockable' when the capture requirement was met, requiring the player to then click an unlock button which called the `unlockPlot` function.
+
+**Solution:** 
+1. Modified the `checkUnlockPlot` function to automatically unlock plots when the required number of captures is met:
+```javascript
+if (plot.state === 'locked' && plot.unlockRequirement <= captures) {
+  // Directly unlock the plot instead of marking it as unlockable
+  plot.state = 'empty';
+  farms[playerColor].unlockedPlots++;
+  
+  console.log(`Plot ${plot.id} automatically unlocked with ${captures} captures`);
+  
+  // Show a message to the player
+  if (playerColor === GameState.getPlayerColor()) {
+    showMessage('New farm plot unlocked!');
+    
+    // Send the update to the server to inform other players
+    SocketManager.sendAutoUnlock(plot.id);
+  }
+}
+```
+
+2. Removed the "unlockable" state and UI elements:
+   - Removed the unlockable state from the `createPlotElement` function
+   - Removed event listeners for unlock buttons
+   - Removed the `unlockPlot` and `handleUnlockPlot` functions
+
+3. Added server communication for automatic unlocking:
+   - Added a `sendAutoUnlock` function to the SocketManager
+   - Updated the `processFarmUpdate` function to handle 'auto-unlock' actions
+
+**Benefits:**
+- Smoother gameplay flow with no manual intervention required
+- Cleaner UI with fewer buttons and interactions
+- More intuitive game mechanics that reward captures immediately
+- Less code to maintain by removing the manual unlocking system
+
+**Date Fixed:** 2025-03-03
+
+### Issue 2: Crop Turn Counter Incorrect
+**Status:** Fixed
+
+**Description:** Crop growth timers were not correctly tracking turns, sometimes resulting in crops taking too long to mature or being ready too quickly. This made the farming system unpredictable and challenging to strategize around.
+
+**Diagnosis:** The issue was in the `processSinglePlot` function which unconditionally decremented the `turnsToHarvest` counter each time it was called, regardless of whether it had been initialized or not. Additionally, there was confusion between crop properties and plot properties related to turn counting.
+
+**Solution:**
+1. Modified the `processSinglePlot` function to only decrement the counter if it was already initialized:
+```javascript
+// Only initialize turnsToHarvest if it's not already set
+// This prevents re-initializing on subsequent turns
+if (plot.turnsToHarvest === undefined || plot.turnsToHarvest === null) {
+  // Use the crop's growth time from standardized data
+  plot.turnsToHarvest = cropData.growthTime;
+  console.log(`Initialized turnsToHarvest for ${plot.id} to ${plot.turnsToHarvest}`);
+} else {
+  // Decrement turns to harvest only if it's already initialized
+  // This ensures we don't count down from the wrong starting point
+  console.log(`${plot.id} turnsToHarvest BEFORE decrement: ${plot.turnsToHarvest}`);
+  plot.turnsToHarvest--;
+  console.log(`${plot.id} turns until harvest AFTER decrement: ${plot.turnsToHarvest}`);
+}
+```
+
+2. Added extensive logging to track the turn counting process:
+```javascript
+console.log(`Planted ${standardizedCrop.name} in plot ${plotIndex+1} with growth time ${standardizedCrop.growthTime}`);
+console.log(`Plot ${playerColor}-plot-${plotIndex} turnsToHarvest set to: ${standardizedCrop.growthTime}`);
+```
+
+3. Clarified the distinction between crop properties (the template) and plot properties (the instance):
+   - Made sure `turnsToHarvest` is correctly initialized from the crop's `growthTime`
+   - Ensured the counter is only decremented once per turn
+   - Fixed the counter to never reset unintentionally during processing
+
+**Benefits:**
+- Crops now grow predictably according to their specified growth time
+- Players can reliably plan their farming strategy based on accurate turn counting
+- Better logging makes it easier to track and debug crop growth
+- Improved code clarity with separate handling for initialization and turn progression
+
+**Date Fixed:** 2025-03-03

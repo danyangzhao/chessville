@@ -397,7 +397,7 @@ const SocketManager = (function() {
   
   /**
    * Send a farm update to the server
-   * @param {string} action - The action type (plant, harvest, unlock)
+   * @param {string} action - The action type (plant, harvest, auto-unlock)
    * @param {Object} data - The action data
    */
   function sendFarmUpdate(action, data) {
@@ -427,6 +427,16 @@ const SocketManager = (function() {
     });
     
     console.log(`Sent plant crop action: plot ${plotIndex}, crop ${cropType}`);
+  }
+  
+  /**
+   * Send an auto-unlock plot action to the server
+   * @param {string} plotId - The ID of the plot to auto-unlock
+   */
+  function sendAutoUnlock(plotId) {
+    sendFarmUpdate('auto-unlock', {
+      plotId: plotId
+    });
   }
   
   /**
@@ -587,14 +597,19 @@ const SocketManager = (function() {
   
   // Public API
   return {
-    initialize,
-    joinRoom,
-    sendChessMove,
-    sendFarmAction,
-    sendFarmUpdate,
-    sendPlantCrop,
-    sendPhaseChange,
-    sendEndTurn,
-    sendGameOver
+    initialize: initialize,
+    joinRoom: joinRoom,
+    sendChessMove: sendChessMove,
+    sendFarmAction: sendFarmAction,
+    sendFarmUpdate: sendFarmUpdate,
+    sendPlantCrop: sendPlantCrop,
+    sendAutoUnlock: sendAutoUnlock,
+    sendPhaseChange: sendPhaseChange,
+    sendEndTurn: sendEndTurn,
+    sendGameOver: sendGameOver,
+    isConnected: isConnected,
+    getSocket: getSocket,
+    getRoomId: getRoomId,
+    getPlayerColor: getPlayerColor,
   };
 })(); 

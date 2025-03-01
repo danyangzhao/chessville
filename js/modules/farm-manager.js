@@ -228,11 +228,6 @@ const FarmManager = (function() {
         <div class="locked-info">Locked</div>
         <div class="locked-info">Need ${plot.unlockRequirement} captures</div>
       `;
-    } else if (plot.state === 'unlockable') {
-      // Unlockable plot
-      plotElement.innerHTML = `
-        <button class="unlock-plot-button" data-plot-id="${plot.id}">Unlock</button>
-      `;
     } else if (plot.state === 'planted') {
       // Planted plot with crop
       if (!plot.crop) {
@@ -289,12 +284,6 @@ const FarmManager = (function() {
     const plantButtons = document.querySelectorAll('.plant-button');
     plantButtons.forEach(button => {
       button.addEventListener('click', handlePlantButtonClick);
-    });
-    
-    // Unlock plot buttons
-    const unlockButtons = document.querySelectorAll('.unlock-plot-button');
-    unlockButtons.forEach(button => {
-      button.addEventListener('click', handleUnlockPlot);
     });
     
     console.log('Added event listeners to farm plot buttons');
@@ -393,6 +382,9 @@ const FarmManager = (function() {
       player: playerColor // Add player color for auto-harvest
     };
     
+    console.log(`Planted ${standardizedCrop.name} in plot ${plotIndex+1} with growth time ${standardizedCrop.growthTime}`);
+    console.log(`Plot ${playerColor}-plot-${plotIndex} turnsToHarvest set to: ${standardizedCrop.growthTime}`);
+    
     // Register the farm action - this marks that the player has taken an action this turn
     GameState.registerFarmAction();
     
@@ -411,53 +403,6 @@ const FarmManager = (function() {
     }, 500); // Small delay for better user experience
     
     return true;
-  }
-  
-  /**
-   * Unlock a plot
-   * @param {string} plotId - The ID of the plot to unlock
-   */
-  function unlockPlot(plotId) {
-    // Check if player can perform a farm action
-    if (!canPerformFarmAction()) {
-      showMessage('You cannot unlock plots now');
-      return;
-    }
-    
-    // Get the plot
-    const plot = getPlotById(plotId);
-    if (!plot) {
-      console.error(`Plot not found: ${plotId}`);
-      return;
-    }
-    
-    // Check if the plot is unlockable
-    if (plot.state !== 'unlockable') {
-      console.warn(`Plot ${plotId} is not unlockable`);
-      showMessage('This plot cannot be unlocked yet');
-      return;
-    }
-    
-    // Get the player color from the plot ID
-    const playerColor = plotId.startsWith('white') ? 'white' : 'black';
-    
-    // Unlock the plot
-    plot.state = 'empty';
-    farms[playerColor].unlockedPlots++;
-    
-    console.log(`Unlocked plot ${plotId}`);
-    showMessage('Plot unlocked');
-    
-    // Register the farm action
-    GameState.registerFarmAction();
-    
-    // Update the farm display
-    updateFarmDisplay();
-    
-    // Send the update to the server
-    SocketManager.sendFarmUpdate('unlock', {
-      plotId: plotId
-    });
   }
   
   /**
@@ -501,13 +446,18 @@ const FarmManager = (function() {
       const plot = farmPlots[i];
       
       if (plot.state === 'locked' && plot.unlockRequirement <= captures) {
-        // Update the plot to unlockable
-        plot.state = 'unlockable';
-        console.log(`Plot ${plot.id} is now unlockable with ${captures} captures`);
+        // Directly unlock the plot instead of marking it as unlockable
+        plot.state = 'empty';
+        farms[playerColor].unlockedPlots++;
+        
+        console.log(`Plot ${plot.id} automatically unlocked with ${captures} captures`);
         
         // Show a message to the player
         if (playerColor === GameState.getPlayerColor()) {
-          showMessage('New farm plot available!');
+          showMessage('New farm plot unlocked!');
+          
+          // Send the update to the server to inform other players
+          SocketManager.sendAutoUnlock(plot.id);
         }
         
         break; // Only unlock one plot at a time
@@ -652,16 +602,19 @@ const FarmManager = (function() {
       return;
     }
 
-    // Initialize turnsToHarvest if not set
+    // Only initialize turnsToHarvest if it's not already set
+    // This prevents re-initializing on subsequent turns
     if (plot.turnsToHarvest === undefined || plot.turnsToHarvest === null) {
       // Use the crop's growth time from standardized data
       plot.turnsToHarvest = cropData.growthTime;
       console.log(`Initialized turnsToHarvest for ${plot.id} to ${plot.turnsToHarvest}`);
+    } else {
+      // Decrement turns to harvest only if it's already initialized
+      // This ensures we don't count down from the wrong starting point
+      console.log(`${plot.id} turnsToHarvest BEFORE decrement: ${plot.turnsToHarvest}`);
+      plot.turnsToHarvest--;
+      console.log(`${plot.id} turns until harvest AFTER decrement: ${plot.turnsToHarvest}`);
     }
-
-    // Decrement turns to harvest
-    plot.turnsToHarvest--;
-    console.log(`${plot.id} turns until harvest: ${plot.turnsToHarvest}`);
 
     // Check if crop is ready for harvest
     if (plot.turnsToHarvest <= 0) {
@@ -849,15 +802,6 @@ const FarmManager = (function() {
       unlockCost.textContent = `${GameConfig.farmConfig.unlockCost} 🌾`;
       plot.display.appendChild(unlockCost);
       
-    } else if (plot.state === 'unlockable') {
-      // Unlockable plot
-      const unlockButton = document.createElement('button');
-      unlockButton.className = 'unlock-button';
-      unlockButton.textContent = `Unlock (${GameConfig.farmConfig.unlockCost} 🌾)`;
-      unlockButton.dataset.plotId = plot.id;
-      unlockButton.addEventListener('click', handleUnlockPlot);
-      plot.display.appendChild(unlockButton);
-      
     } else if (plot.state === PLOT_STATE.PLANTED) {
       // Planted plot - show crop and turns to harvest
       let cropData;
@@ -971,11 +915,11 @@ const FarmManager = (function() {
       case 'harvest':
         processFarmUpdateHarvest(data);
         break;
-      case 'unlock':
-        processFarmUpdateUnlock(data);
+      case 'auto-unlock':
+        processFarmUpdateAutoUnlock(data);
         break;
       default:
-        console.warn(`Unknown farm update action: ${action}`);
+        console.warn(`Unknown farm action: ${action}`);
     }
     
     // Update the farm display
@@ -983,8 +927,8 @@ const FarmManager = (function() {
   }
   
   /**
-   * Process a 'plant' farm update from the server
-   * @param {Object} data - The action data
+   * Process farm update for planting a crop
+   * @param {Object} data - The update data
    */
   function processFarmUpdatePlant(data) {
     const { plotId, cropType } = data;
@@ -1023,8 +967,8 @@ const FarmManager = (function() {
   }
   
   /**
-   * Process a 'harvest' farm update from the server
-   * @param {Object} data - The action data
+   * Process farm update for harvesting a crop
+   * @param {Object} data - The update data
    */
   function processFarmUpdateHarvest(data) {
     const { plotId } = data;
@@ -1048,10 +992,10 @@ const FarmManager = (function() {
   }
   
   /**
-   * Process an 'unlock' farm update from the server
-   * @param {Object} data - The action data
+   * Process farm update for automatically unlocking a plot
+   * @param {Object} data - The update data
    */
-  function processFarmUpdateUnlock(data) {
+  function processFarmUpdateAutoUnlock(data) {
     const { plotId } = data;
     
     // Get the plot
@@ -1064,11 +1008,16 @@ const FarmManager = (function() {
     // Get the player color from the plot ID
     const playerColor = plotId.startsWith('white') ? 'white' : 'black';
     
-    // Unlock the plot
-    plot.state = 'empty';
-    farms[playerColor].unlockedPlots++;
-    
-    console.log(`Opponent unlocked plot ${plotId}`);
+    // Set the plot to empty (unlocked)
+    if (plot.state === 'locked') {
+      plot.state = 'empty';
+      farms[playerColor].unlockedPlots++;
+      
+      console.log(`Plot ${plotId} was automatically unlocked`);
+      
+      // Update the farm display
+      updateFarmDisplay();
+    }
   }
   
   /**
@@ -1238,26 +1187,12 @@ const FarmManager = (function() {
     }
   }
   
-  /**
-   * Handle click on the unlock button
-   * @param {Event} event - The click event
-   */
-  function handleUnlockPlot(event) {
-    const plotId = event.target.dataset.plotId;
-    if (canPerformFarmAction()) {
-      unlockPlot(plotId);
-    } else {
-      showMessage('You cannot unlock plots now');
-    }
-  }
-  
   // Public API
   return {
     initialize: initialize,
     initializeModule: initializeModule,
     initializeFarmDisplay: initializeFarmDisplay,
     plantCrop: plantCrop,
-    unlockPlot: unlockPlot,
     updateFarmDisplay: updateFarmDisplay,
     updatePlotDisplay: updatePlotDisplay,
     processTurn: processTurn,
