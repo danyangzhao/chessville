@@ -582,25 +582,10 @@ const SocketManager = (function() {
       console.log('Setting current turn to ' + playerColor + ' after opponent\'s move');
       GameState.setCurrentTurn(playerColor);
       
-      // Now that it's the player's turn, process farm plots
-      console.log('It is now YOUR turn after opponent move - Processing farm plots');
-      if (typeof FarmManager !== 'undefined' && typeof FarmManager.processTurn === 'function') {
-        try {
-          // Log farm state before processing
-          console.log('Farm state BEFORE processing turn after opponent move:', 
-            typeof FarmManager.getState === 'function' ? 
-            JSON.stringify(FarmManager.getState()) : 'getState not available');
-          
-          FarmManager.processTurn();
-          console.log('Successfully processed farm turn after opponent move');
-          
-          // Log farm state after processing
-          console.log('Farm state AFTER processing turn after opponent move:', 
-            typeof FarmManager.getState === 'function' ? 
-            JSON.stringify(FarmManager.getState()) : 'getState not available');
-        } catch (error) {
-          console.error('Error processing farm turn after opponent move:', error);
-        }
+      // Log the farm state for debugging but do not process farm plots
+      if (typeof FarmManager !== 'undefined' && typeof FarmManager.getState === 'function') {
+        console.log('Farm state after opponent move (not processing):', 
+          JSON.stringify(FarmManager.getState()));
       }
       
       // Now refresh the board with the corrected game state

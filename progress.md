@@ -1382,3 +1382,74 @@ These functions implement the basic functionality required by the Socket Manager
 - Add visual feedback to indicate game state changes
 - Refine error handling for edge cases
 - Ensure all module APIs are fully implemented and documented
+
+## March 3, 2025 - Farm Turn Processing Fix
+
+### Issue: Farm Turns Being Decremented Twice
+**Status:** Fixed
+**Description:** The crop growth timer was being decremented twice during a player's turn - once after receiving the opponent's move and again when processing their own turn. This caused crops to grow twice as fast as intended.
+**Diagnosis:** 
+1. The logs showed that `FarmManager.processTurn()` was being called in two different places:
+   - In `processChessMove()` when receiving an opponent's move
+   - In `processYourTurn()` when the player's turn started
+2. According to the original game design, 1 full harvest turn is defined as when a player goes back to their own farming phase, but the code was counting the opponent's turn as well.
+3. This resulted in crops being ready to harvest in half the intended time.
+
+**Solution:**
+1. Removed the farm processing code from the `processChessMove` function, keeping it only in the `processYourTurn` function.
+2. Added logging to track the farm state without processing it when receiving an opponent's move.
+3. This ensures that crop turn counters are only decreased once per full game turn, maintaining the intended game balance.
+
+**Code Change:**
+```javascript
+// Removed this code from processChessMove:
+console.log('It is now YOUR turn after opponent move - Processing farm plots');
+if (typeof FarmManager !== 'undefined' && typeof FarmManager.processTurn === 'function') {
+  try {
+    // Log farm state before processing
+    console.log('Farm state BEFORE processing turn after opponent move:', 
+      typeof FarmManager.getState === 'function' ? 
+      JSON.stringify(FarmManager.getState()) : 'getState not available');
+    
+    FarmManager.processTurn();
+    console.log('Successfully processed farm turn after opponent move');
+    
+    // Log farm state after processing
+    console.log('Farm state AFTER processing turn after opponent move:', 
+      typeof FarmManager.getState === 'function' ? 
+      JSON.stringify(FarmManager.getState()) : 'getState not available');
+  } catch (error) {
+    console.error('Error processing farm turn after opponent move:', error);
+  }
+}
+
+// Replaced with:
+// Log the farm state for debugging but do not process farm plots
+if (typeof FarmManager !== 'undefined' && typeof FarmManager.getState === 'function') {
+  console.log('Farm state after opponent move (not processing):', 
+    JSON.stringify(FarmManager.getState()));
+}
+```
+
+**Date Fixed:** 2025-03-03
+
+**Impact:** 
+- Crop growth now follows the intended game design - crops take the full number of turns to grow as specified in their configuration
+- Game balance is restored, preventing players from harvesting crops too quickly
+- Farm economy is now properly paced, creating a more strategic gameplay experience
+- The change better aligns with the original game design where a "harvest turn" is counted when a player returns to their own farming phase
+
+## Current Status and Next Steps
+The Chess Farm Game is now functioning with correctly paced farm turns, ensuring that the economic side of the game is balanced as intended. This improves the overall gameplay experience by making resource management more strategic and preventing players from generating wheat too quickly.
+
+The farm mechanic now works as follows:
+1. Players plant crops during their farm phase
+2. The turn counter for crops decreases by 1 each time the player takes a turn (not when the opponent takes a turn)
+3. When the counter reaches 0, the crop becomes ready for harvest
+4. The player can then harvest the crop during their farm phase for the appropriate wheat yield
+
+The next steps for development include:
+- Further testing of farm and chess mechanics
+- Implementing additional UI improvements
+- Adding tutorial elements to guide new players
+- Considering additional farm features like different crop types or upgrades
