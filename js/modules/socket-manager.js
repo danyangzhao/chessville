@@ -613,6 +613,38 @@ const SocketManager = (function() {
     }
   }
   
+  /**
+   * Check if the socket is connected
+   * @returns {boolean} True if the socket is initialized and connected
+   */
+  function isConnected() {
+    return socket !== null && socket.connected;
+  }
+  
+  /**
+   * Get the socket instance
+   * @returns {Object|null} The socket instance or null if not initialized
+   */
+  function getSocket() {
+    return socket;
+  }
+  
+  /**
+   * Get the room ID
+   * @returns {string|null} The room ID or null if not in a room
+   */
+  function getRoomId() {
+    return roomId;
+  }
+  
+  /**
+   * Get the player's color
+   * @returns {string|null} The player's color or null if not assigned
+   */
+  function getPlayerColor() {
+    return GameState ? GameState.getPlayerColor() : null;
+  }
+  
   // Public API
   return {
     initialize: initialize,

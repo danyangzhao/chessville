@@ -1013,7 +1013,7 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 
 **Solution:** Made gameConfig.js the single source of truth for crop data:
 
-1. Added helper functions to standardize crop property access:
+1. Added helper functions to standardize crop data access:
 
 ```javascript
 function standardizeCropData(cropData) {
@@ -1303,3 +1303,82 @@ console.log(`Showing screen: ${screenId}`, 'Current screen:', currentScreen);
 - Enhance mobile responsiveness for all game screens
 - Add visual feedback to indicate game state changes
 - Refine error handling for edge cases
+
+## Socket Manager Reference Error Fix (Current Date)
+
+### Issue: Socket Manager API Reference Errors
+**Status:** Fixed
+
+**Description:** The game was experiencing reference errors related to the Socket Manager, preventing the game from initializing properly. The following error messages were observed in the console:
+
+```
+socket-manager.js:628 Uncaught ReferenceError: isConnected is not defined
+client-core.js:5 Chessville initializing...
+...
+client-core.js:61 Critical initialization error: ReferenceError: SocketManager is not defined
+...
+ui-manager.js:53 Uncaught ReferenceError: SocketManager is not defined
+```
+
+**Diagnosis:** After examining the code, I found that several functions were referenced in the Socket Manager's public API but were never defined in the module:
+
+1. `isConnected` - Referenced in the public API at line 628 but not defined anywhere
+2. `getSocket` - Referenced in the public API but not defined
+3. `getRoomId` - Referenced in the public API but not defined
+4. `getPlayerColor` - Referenced in the public API but not defined
+
+This was causing the SocketManager module initialization to fail, which in turn caused other modules that depend on it to fail with "SocketManager is not defined" errors.
+
+**Solution:** Added the missing function implementations to the socket-manager.js file:
+
+```javascript
+/**
+ * Check if the socket is connected
+ * @returns {boolean} True if the socket is initialized and connected
+ */
+function isConnected() {
+  return socket !== null && socket.connected;
+}
+
+/**
+ * Get the socket instance
+ * @returns {Object|null} The socket instance or null if not initialized
+ */
+function getSocket() {
+  return socket;
+}
+
+/**
+ * Get the room ID
+ * @returns {string|null} The room ID or null if not in a room
+ */
+function getRoomId() {
+  return roomId;
+}
+
+/**
+ * Get the player's color
+ * @returns {string|null} The player's color or null if not assigned
+ */
+function getPlayerColor() {
+  return GameState ? GameState.getPlayerColor() : null;
+}
+```
+
+These functions implement the basic functionality required by the Socket Manager's public API, allowing it to initialize correctly and be used by other modules.
+
+**Benefits:**
+- Fixed the Socket Manager initialization failure
+- Resolved the "SocketManager is not defined" errors in dependent modules
+- Completed the Socket Manager's public API with properly implemented functions
+- Restored the game's ability to connect to rooms and handle multiplayer functionality
+- Improved code consistency and maintainability
+
+**Date Fixed:** Current Date
+
+## Current Development Focus
+- Continue improving user experience with clear UI transitions
+- Enhance mobile responsiveness for all game screens
+- Add visual feedback to indicate game state changes
+- Refine error handling for edge cases
+- Ensure all module APIs are fully implemented and documented
