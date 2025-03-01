@@ -1075,3 +1075,54 @@ function prepareCropForPlanting(cropType) {
 - Added better error reporting for missing crop data
 
 **Date Fixed:** Current Date
+
+## Farm Plot Unlocking Fix (2025-03-02)
+
+### Issue: Capturing Chess Pieces Results in Error Blocking Game Progression
+**Status:** Fixed
+
+**Description:** When a player captured a chess piece, the game would throw an error and block further progress. Specifically, farm plots were not being unlocked properly after capturing pieces, and the error message indicated that `FarmManager.checkUnlockPlot is not a function`.
+
+**Diagnosis:** After examining the code, we found that while the `checkUnlockPlot` function was properly defined in the `farm-manager.js` file (lines 490-524), it was not included in the FarmManager module's public API (return object). As a result, when `game-state.js` tried to call `FarmManager.checkUnlockPlot(color)` in the `recordCapture` function, it encountered a "function not defined" error.
+
+**Stack Trace:**
+```
+Error processing move: TypeError: FarmManager.checkUnlockPlot is not a function
+    at Object.recordCapture (game-state.js:389:17)
+    at tryMovePiece (chess-manager.js:453:19)
+    at handleSquareClick (chess-manager.js:256:26)
+    at HTMLDivElement.<anonymous> (chess-manager.js:181:9)
+```
+
+**Solution:** Added the `checkUnlockPlot` function to the FarmManager module's public API by updating the return object at the end of the `farm-manager.js` file:
+
+```javascript
+// Public API
+return {
+  initialize: initialize,
+  initializeModule: initializeModule,
+  initializeFarmDisplay: initializeFarmDisplay,
+  plantCrop: plantCrop,
+  unlockPlot: unlockPlot,
+  updateFarmDisplay: updateFarmDisplay,
+  updatePlotDisplay: updatePlotDisplay,
+  processTurn: processTurn,
+  processFarmUpdate: processFarmUpdate,
+  processFarmAction: processFarmAction,
+  autoHarvestCrop: autoHarvestCrop,
+  getState: getState,
+  checkUnlockPlot: checkUnlockPlot, // Added this function to the public API
+  
+  // Debugging functions (consider removing in production)
+  getPlotById: getPlotById,
+  // ... other debugging functions ...
+};
+```
+
+**Impact of Fix:**
+- Players can now successfully capture pieces without encountering errors
+- Farm plots are properly unlocked after capturing the required number of pieces
+- Game progression continues as intended following piece captures
+- The game economy functions as designed, with captures providing both wheat and potential plot unlocks
+
+**Date Fixed:** 2025-03-02

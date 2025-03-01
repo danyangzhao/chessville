@@ -27,28 +27,28 @@ const GameConfig = {
       emoji: "🌾",
       cost: 5,
       turnsTillHarvest: 2,
-      yield: 15
+      yield: 10
     },
     corn: {
       name: "Corn", // This is still named corn but it produces wheat resource
       emoji: "🌽",
-      cost: 10,
+      cost: 8,
       turnsTillHarvest: 3,
-      yield: 25
+      yield: 20
     },
     carrot: {
       name: "Carrot",
       emoji: "🥕",
-      cost: 15,
-      turnsTillHarvest: 3,
-      yield: 35
+      cost: 12,
+      turnsTillHarvest: 4,
+      yield: 33
     },
     potato: {
       name: "Potato",
       emoji: "🥔",
-      cost: 20,
-      turnsTillHarvest: 4,
-      yield: 50
+      cost: 15,
+      turnsTillHarvest: 5,
+      yield: 45
     }
   },
   

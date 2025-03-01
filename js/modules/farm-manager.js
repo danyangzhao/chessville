@@ -1265,6 +1265,7 @@ const FarmManager = (function() {
     processFarmAction: processFarmAction,
     autoHarvestCrop: autoHarvestCrop,
     getState: getState,
+    checkUnlockPlot: checkUnlockPlot,
     
     // Debugging functions (consider removing in production)
     getPlotById: getPlotById,
