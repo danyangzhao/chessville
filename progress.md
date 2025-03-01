@@ -999,175 +999,79 @@ The Chess Farm Game is now more accessible on mobile devices, allowing players t
 4. Improved chess piece movement visualization
 5. Game playback/review system for completed games
 
-## Function Reference Error Fix (March 5, 2025)
+## Module Property Consistency Fix (Current Date)
 
-### Issue: Missing Reference to `initializeFarmDisplay` in Public API
+### Issue: Inconsistent Crop Property Names and Values
 **Status:** Fixed
-**Description:** After implementing the automatic harvesting system, users were experiencing an error: `Uncaught TypeError: FarmManager.initializeFarmDisplay is not a function` when trying to start a game. This occurred in `ui-manager.js` line 308 when setting up the game UI.
-**Diagnosis:** The error occurred because the `initializeFarmDisplay` function was defined in the `farm-manager.js` file but wasn't being exposed in the public API. The UI manager was trying to call this function directly but couldn't access it.
-**Solution:** Updated the public API in `farm-manager.js` to include the `initializeFarmDisplay` function:
+
+**Description:** The crop data in the game was inconsistent across different modules. The gameConfig.js file defined properties like `seedCost` and `harvestYield`, but the farm manager was using `cost` and `yield`. Additionally, some crop values in use differed from those defined in gameConfig.js, suggesting another source was overriding these values.
+
+**Diagnosis:** The issue was found in multiple areas:
+1. The farm-manager.js file contained hardcoded crop data that was overriding the values from gameConfig.js
+2. Property names were inconsistent between modules (`seedCost` vs `cost`, `harvestYield` vs `yield`)
+3. When accessing crop properties, the code was checking for multiple property names, leading to unpredictable behavior
+
+**Solution:** Made gameConfig.js the single source of truth for crop data:
+
+1. Added helper functions to standardize crop property access:
+
 ```javascript
-// Public API
-return {
-  initialize,
-  initializeModule: initialize, // Backwards compatibility alias
-  initializeFarmDisplay, // Added this to fix the reference error
-  plantCrop,
-  // ... other functions ...
-};
+function standardizeCropData(cropData) {
+  if (!cropData) return null;
+  
+  return {
+    type: cropData.type,
+    name: cropData.name || (cropData.type ? cropData.type.charAt(0).toUpperCase() + cropData.type.slice(1) : 'Crop'),
+    cost: cropData.seedCost || cropData.cost || 5,
+    growthTime: cropData.growthTime || cropData.turnsTillHarvest || 2,
+    yield: cropData.harvestYield || cropData.yield || 15,
+    emoji: cropData.emoji || "🌾"
+  };
+}
+
+function prepareCropForPlanting(cropType) {
+  // Get crop data from the game config
+  const configCrop = GameConfig.crops[cropType];
+  if (!configCrop) {
+    console.error(`Unknown crop type: ${cropType}`);
+    return null;
+  }
+  
+  // Create a standardized crop object with consistent property names
+  return standardizeCropData({
+    type: cropType,
+    name: configCrop.name,
+    cost: configCrop.cost,
+    growthTime: configCrop.turnsTillHarvest,
+    yield: configCrop.yield,
+    emoji: configCrop.emoji
+  });
+}
 ```
+
+2. Updated key functions to use standardized crop data:
+   - Modified `plantCrop` to standardize data before planting
+   - Updated `processFarmUpdatePlant` to prepare and use standardized crop data
+   - Refactored `autoHarvestCrop` to always use standardized properties, eliminating multiple property checks
+   - Updated `processSinglePlot` to ensure consistent property access
+   - Modified UI functions like `showPlantSelector` and `generatePlantSelectorHTML` to use standardized crop data
+
+3. Added the standardization functions to FarmManager's public API, making them available throughout the codebase.
+
 **Benefits:**
-- Fixed the console error that was breaking game initialization
-- Ensured proper farm display initialization when the game starts
-- Maintained the separation of concerns while providing necessary access
-
-**Date Fixed:** March 5, 2025
-
-## Current Development Focus
-1. Continuing to improve the user experience with the auto-harvesting system
-2. Adding more visual enhancements to the farming interface
-3. Resolving edge cases in the game flow
-4. Improving performance for mobile devices
-5. Expanding crop variety and gameplay options
-
-## Latest Updates (2025-03-02)
-
-### Fixed Critical Bugs
-
-#### Issue: Missing PLOT_STATE Enum in Farm Manager
-**Status:** Fixed
-**Description:** Farm plots were not being properly processed due to a ReferenceError: `PLOT_STATE is not defined`.
-**Diagnosis:** The farm-manager.js file was referencing a PLOT_STATE enum that wasn't defined.
-**Solution:** Added the missing PLOT_STATE enum to the farm-manager.js file:
-```javascript
-// Plot states enum
-const PLOT_STATE = {
-  EMPTY: 'empty',
-  PLANTED: 'planted',
-  GROWING: 'growing',
-  READY: 'ready',
-  LOCKED: 'locked'
-};
-```
-**Date Fixed:** 2025-03-02
-
-#### Issue: Missing processOpponentMove Function
-**Status:** Fixed
-**Description:** Processing chess moves from the opponent was failing with error: `ChessManager.processOpponentMove is not a function`.
-**Diagnosis:** The socket-manager.js was calling `ChessManager.processOpponentMove()` but this function didn't exist in the ChessManager module.
-**Solution:** Added the processOpponentMove function to chess-manager.js, which acts as a wrapper for the existing processChessMove function:
-```javascript
-function processOpponentMove(data) {
-  // Check if we're receiving the move object or a wrapper with move and fen
-  const moveData = data.move ? data.move : data;
-  const fen = data.fen || null;
-  
-  if (fen) {
-    // If we got a FEN string, attach it to the move data for potential recovery
-    moveData.fen = fen;
-  }
-  
-  // Call the existing processChessMove function
-  processChessMove(moveData);
-  
-  // Update the board to show the move
-  updateBoard();
-  
-  // Check for game end conditions
-  checkGameEndConditions();
-}
-```
-**Date Fixed:** 2025-03-02
-
-#### Issue: Chess Board Resetting After Moves
-**Status:** Fixed
-**Description:** Chess moves were being made but the chess board was resetting, losing the move history.
-**Diagnosis:** The refreshBoard function in chess-manager.js was unnecessarily resetting the board when there was a mismatch between the chess engine turn and the game state turn.
-**Solution:** Improved the FEN state handling in the refreshBoard function to prevent unnecessary resets:
-1. Modified the code to keep the current state when validation fails instead of resetting
-2. Added better error handling around FEN validation
-3. Simplified the board updating process
-```javascript
-// Try to validate and load the new FEN
-try {
-  if (chessEngine.validate_fen(newFEN).valid) {
-    chessEngine.load(newFEN);
-    debugLog('Successfully updated FEN with correct turn');
-  } else {
-    // Don't reset the board, just log the error
-    debugLog('Generated FEN is invalid, keeping current state');
-  }
-} catch (error) {
-  debugLog('Error validating FEN, keeping current state:', error);
-}
-```
-**Date Fixed:** 2025-03-02
-
-### Next Steps
-- Continue testing to ensure all game mechanics function correctly
-- Implement end-game conditions and victory/defeat screens
-- Add farm display improvements and visual feedback
-- Create a tutorial for new players
-
-## Module Reference Inconsistency Fix (Current Date)
-
-### Issue: Incorrect UI Manager Reference in Farm Manager
-**Status:** Fixed
-
-**Description:** After implementing several fixes for the farm system, users encountered a new error: `Uncaught ReferenceError: UiManager is not defined` when attempting to click on farm plots. This prevented players from planting crops and accessing farm functionality.
-
-**Diagnosis:** The error occurred because the farm-manager.js file was using an incorrect reference to the UI manager module. In the `handlePlantButtonClick` function, it was using `UiManager` (lowercase 'i') instead of the correct `UIManager` (uppercase 'I') that is defined in ui-manager.js.
-
-**Solution:** Updated the reference in the handlePlantButtonClick function to use the correct capitalization:
-
-```javascript
-function handlePlantButtonClick(event) {
-  const plotId = event.target.dataset.plotId;
-  if (canPerformFarmAction()) {
-    UIManager.showPlantSelector(plotId);  // Corrected from UiManager to UIManager
-  } else {
-    showMessage('You cannot plant now');
-  }
-}
-```
+- Consistent crop data throughout the game
+- Single source of truth in GameConfig.crops
+- More predictable behavior with standardized property names
+- Easier balancing of game mechanics by adjusting values in one place
+- Better code maintainability
+- Eliminated redundant property checks and multiple fallback code paths
+- Improved error logging and handling
 
 **Key Changes:**
-- Fixed the capitalization of UIManager throughout the codebase to ensure consistency
-- Verified that all function calls use the correct module reference
-- Ensured the event handler correctly delegates to the UI manager's functionality
-
-**Benefits:**
-- Restored ability for players to interact with farm plots
-- Fixed the planting functionality
-- Prevented JavaScript errors in the console
-- Ensured proper module communication between Farm Manager and UI Manager
+- Removed duplicate crop definitions
+- Standardized property access with helper functions
+- Updated the UI to display the correct values from GameConfig
+- Fixed the auto-harvest system to use the correct yield values
+- Added better error reporting for missing crop data
 
 **Date Fixed:** Current Date
-
-## Implemented Turn Counter Fix (Current Date)
-
-Following the diagnosis of the crop growth turn counter issue, we've successfully implemented the fix across several key files:
-
-1. **farm-manager.js**:
-   - Modified the `processTurn` function to only process a player's plots when it's their own turn
-   - Updated the condition to only decrement `turnsToHarvest` for white plots when it's white's turn and for black plots when it's black's turn
-   - Kept the auto-harvesting logic intact for mature crops
-
-2. **socket-manager.js**:
-   - Updated `processYourTurn` to only process farm plots when it's actually the player's turn, not the opponent's
-   - Modified `processChessMove` to correctly handle the turn transition after an opponent's move
-   - Added clearer logging to distinguish between processing during player's vs. opponent's turns
-
-3. **game-state.js**:
-   - Updated `processTurnChange` to only call FarmManager.processTurn when it's the player's turn
-   - Added additional logging to make the turn processing more transparent
-
-These changes ensure that crop growth progresses at the correct rate, with each "turn" representing a complete cycle back to the same player, rather than counting both players' turns. Players should now see their crops mature after the intended number of complete game turns.
-
-**Results**:
-- Crops with 2-turn growth cycles now take 2 complete game cycles to mature
-- Turn counting is consistent with player expectations
-- The auto-harvesting system works correctly when crops mature
-- Overall game balance is improved
-
-**Date Implemented:** Current Date

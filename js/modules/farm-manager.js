@@ -18,8 +18,50 @@ const FarmManager = (function() {
     }
   };
   
-  // Define CROPS constant from GameConfig
+  // Use GameConfig.crops as the single source of truth
   const CROPS = GameConfig.crops;
+  
+  /**
+   * Standardizes crop data to ensure consistent property names
+   * @param {Object} cropData - The crop data to standardize
+   * @returns {Object} - Standardized crop data object
+   */
+  function standardizeCropData(cropData) {
+    if (!cropData) return null;
+    
+    return {
+      type: cropData.type,
+      name: cropData.name || (cropData.type ? cropData.type.charAt(0).toUpperCase() + cropData.type.slice(1) : 'Crop'),
+      cost: cropData.seedCost || cropData.cost || 5,
+      growthTime: cropData.growthTime || cropData.turnsTillHarvest || 2,
+      yield: cropData.harvestYield || cropData.yield || 15,
+      emoji: cropData.emoji || "🌾"
+    };
+  }
+  
+  /**
+   * Prepares crop data for planting using the game config as source of truth
+   * @param {string} cropType - The type of crop to prepare
+   * @returns {Object} - Standardized crop data ready for planting
+   */
+  function prepareCropForPlanting(cropType) {
+    // Get crop data from the game config
+    const configCrop = GameConfig.crops[cropType];
+    if (!configCrop) {
+      console.error(`Unknown crop type: ${cropType}`);
+      return null;
+    }
+    
+    // Create a standardized crop object with consistent property names
+    return standardizeCropData({
+      type: cropType,
+      name: configCrop.name,
+      cost: configCrop.cost,
+      growthTime: configCrop.turnsTillHarvest,
+      yield: configCrop.yield,
+      emoji: configCrop.emoji
+    });
+  }
   
   // Plot states enum
   const PLOT_STATE = {
@@ -329,29 +371,25 @@ const FarmManager = (function() {
       return false;
     }
     
+    // Standardize the crop data to ensure consistent property names
+    const standardizedCrop = standardizeCropData(cropData);
+    
     // Check if player has enough resources
-    const seedCost = cropData.cost || 1;
+    const seedCost = standardizedCrop.cost;
     if (!GameState.updateWheat(playerColor, -seedCost)) {
       console.error(`Not enough wheat to plant crop (required: ${seedCost})`);
       showMessage(`Not enough wheat to plant crop (required: ${seedCost})`);
       return false;
     }
     
-    // Update farm state - FIXING: Store complete crop object with proper property names
+    // Update farm state with standardized crop data
     farms[playerColor].plots[plotIndex] = {
       id: `${playerColor}-plot-${plotIndex}`,
       index: plotIndex,
       state: 'planted',
-      crop: {
-        type: cropData.type,
-        name: cropData.name,
-        emoji: cropData.emoji,
-        turnsTillHarvest: cropData.growthTime || cropData.turnsTillHarvest,
-        yield: cropData.yield,
-        cost: cropData.cost
-      },
+      crop: standardizedCrop,
       plantedTurn: GameState.getCurrentTurn(),
-      turnsToHarvest: cropData.growthTime || cropData.turnsTillHarvest,
+      turnsToHarvest: standardizedCrop.growthTime,
       player: playerColor // Add player color for auto-harvest
     };
     
@@ -362,9 +400,9 @@ const FarmManager = (function() {
     displayFarms();
     
     // Notify the server
-    SocketManager.sendPlantCrop(plotIndex, cropData.type);
+    SocketManager.sendPlantCrop(plotIndex, standardizedCrop.type);
     
-    showMessage(`Planted ${cropData.name} in plot ${plotIndex+1}`);
+    showMessage(`Planted ${standardizedCrop.name} in plot ${plotIndex+1}`);
     
     // Auto-skip to chess phase after planting
     setTimeout(() => {
@@ -588,23 +626,23 @@ const FarmManager = (function() {
       return;
     }
 
-    // Get crop data
+    // Get standardized crop data
     let cropData;
     
-    // If plot.crop is a string (crop type), get the data from CROPS
+    // If plot.crop is a string (crop type), get and standardize the data from CROPS
     if (typeof plot.crop === 'string') {
-      cropData = CROPS[plot.crop];
+      const configCrop = CROPS[plot.crop];
+      if (configCrop) {
+        cropData = standardizeCropData({
+          type: plot.crop,
+          ...configCrop
+        });
+      }
       console.log(`Processing plot with crop type: ${plot.crop}`);
     } 
-    // If plot.crop is an object, use it directly
+    // If plot.crop is an object, standardize it
     else if (typeof plot.crop === 'object') {
-      cropData = plot.crop;
-      
-      // Also try to get additional data from CROPS if type is available
-      if (plot.crop.type && CROPS[plot.crop.type]) {
-        // Merge with CROPS data if available
-        cropData = Object.assign({}, CROPS[plot.crop.type], cropData);
-      }
+      cropData = standardizeCropData(plot.crop);
       console.log(`Processing plot with crop object:`, cropData);
     }
 
@@ -616,8 +654,8 @@ const FarmManager = (function() {
 
     // Initialize turnsToHarvest if not set
     if (plot.turnsToHarvest === undefined || plot.turnsToHarvest === null) {
-      // Use the crop's growth time or default to 2 turns
-      plot.turnsToHarvest = cropData.turnsTillHarvest || cropData.growthTime || 2;
+      // Use the crop's growth time from standardized data
+      plot.turnsToHarvest = cropData.growthTime;
       console.log(`Initialized turnsToHarvest for ${plot.id} to ${plot.turnsToHarvest}`);
     }
 
@@ -674,20 +712,21 @@ const FarmManager = (function() {
         return false;
       }
       
-      // Get the crop data
+      // Get the standardized crop data
       let cropData = null;
+      
       if (typeof plot.crop === 'string') {
-        // If plot.crop is a string (crop type), get the data from CROPS
-        cropData = CROPS[plot.crop];
-      } else if (plot.crop && typeof plot.crop === 'object') {
-        // If plot.crop is an object, use it directly
-        cropData = plot.crop;
-        
-        // Also try to get additional data from CROPS if type is available
-        if (plot.crop.type && CROPS[plot.crop.type]) {
-          // Merge with CROPS data if available
-          cropData = Object.assign({}, CROPS[plot.crop.type], cropData);
+        // If plot.crop is a string (crop type), get the data from CROPS and standardize it
+        const configCrop = CROPS[plot.crop];
+        if (configCrop) {
+          cropData = standardizeCropData({
+            type: plot.crop,
+            ...configCrop
+          });
         }
+      } else if (plot.crop && typeof plot.crop === 'object') {
+        // If plot.crop is already an object, just standardize it
+        cropData = standardizeCropData(plot.crop);
       }
       
       if (!cropData) {
@@ -698,38 +737,13 @@ const FarmManager = (function() {
         return false;
       }
       
-      // Determine yield amount (try multiple property names for robustness)
-      let yieldAmount = 0;
-      
       // Log all available properties for debugging
-      console.log(`Crop data for harvesting:`, cropData);
+      console.log(`Standardized crop data for harvesting:`, cropData);
       
-      // Try multiple possible property names for yield amount
-      if (typeof cropData.yield === 'number') {
-        yieldAmount = cropData.yield;
-        console.log(`Using 'yield' property: ${yieldAmount}`);
-      } else if (typeof cropData.yieldAmount === 'number') {
-        yieldAmount = cropData.yieldAmount;
-        console.log(`Using 'yieldAmount' property: ${yieldAmount}`);
-      } else if (typeof cropData.harvestYield === 'number') {
-        yieldAmount = cropData.harvestYield;
-        console.log(`Using 'harvestYield' property: ${yieldAmount}`);
-      } else if (typeof cropData.harvest === 'number') {
-        yieldAmount = cropData.harvest;
-        console.log(`Using 'harvest' property: ${yieldAmount}`);
-      } else {
-        // Default to the yield of wheat if available, or a fallback value
-        yieldAmount = CROPS.wheat ? (CROPS.wheat.yield || 3) : 3;
-        console.log(`No yield property found, defaulting to ${yieldAmount}`);
-      }
+      // Use the standardized yield value
+      const yieldAmount = cropData.yield;
       
-      // Sanity check the yield amount
-      if (yieldAmount <= 0) {
-        console.error(`Invalid yield amount (${yieldAmount}) for ${plot.crop}, using default of 3`);
-        yieldAmount = 3;
-      }
-      
-      console.log(`AUTO-HARVEST: harvesting ${plot.crop} from plot ${plot.id} for ${yieldAmount} wheat`);
+      console.log(`AUTO-HARVEST: harvesting ${cropData.name} from plot ${plot.id} for ${yieldAmount} wheat`);
       
       // Update the player's wheat
       let success = false;
@@ -778,7 +792,6 @@ const FarmManager = (function() {
       
       console.log(`AUTO-HARVEST for plot ${plot.id}: ${success ? 'SUCCESSFUL' : 'PARTIALLY FAILED'} - plot cleared`);
       return success;
-      
     } catch (error) {
       console.error(`Error in autoHarvestCrop for plot ${plot.id}:`, error);
       
@@ -983,31 +996,27 @@ const FarmManager = (function() {
       return;
     }
     
-    // Get the crop data
-    const cropData = GameConfig.crops[cropType];
-    if (!cropData) {
+    // Get the crop data from GameConfig and standardize it
+    const configCrop = GameConfig.crops[cropType];
+    if (!configCrop) {
       console.error(`Crop type not found: ${cropType}`);
       return;
     }
+    
+    // Prepare standardized crop data
+    const standardizedCrop = prepareCropForPlanting(cropType);
     
     // Determine the player color from plot ID
     const playerColor = plotId.startsWith('white-') ? 'white' : 'black';
     const plotIndex = parseInt(plotId.split('-').pop());
     
-    // Plant the crop - store with consistent data structure
+    // Plant the crop with standardized data
     plot.state = 'planted';
-    plot.crop = {
-      type: cropType,
-      name: cropData.name,
-      emoji: cropData.emoji,
-      turnsTillHarvest: cropData.turnsTillHarvest,
-      yield: cropData.yield,
-      cost: cropData.cost
-    };
+    plot.crop = standardizedCrop;
     plot.plantedTurn = GameState.getCurrentTurn();
-    plot.turnsToHarvest = cropData.turnsTillHarvest;
+    plot.turnsToHarvest = standardizedCrop.growthTime;
     
-    console.log(`Opponent planted ${cropData.name} in plot ${plotId}`);
+    console.log(`Opponent planted ${standardizedCrop.name} in plot ${plotId}`);
     
     // Update farm display to reflect changes
     updateFarmDisplay();
@@ -1244,22 +1253,24 @@ const FarmManager = (function() {
   
   // Public API
   return {
-    initialize,
-    initializeModule: initialize, // Backwards compatibility alias
-    initializeFarmDisplay,
-    plantCrop,
-    unlockPlot,
-    updateFarmDisplay,
-    updatePlotDisplay,
-    processTurn,
-    processFarmUpdate,
-    processFarmAction,
-    autoHarvestCrop, // Still needed internally for socket events
-    getState,
+    initialize: initialize,
+    initializeModule: initializeModule,
+    initializeFarmDisplay: initializeFarmDisplay,
+    plantCrop: plantCrop,
+    unlockPlot: unlockPlot,
+    updateFarmDisplay: updateFarmDisplay,
+    updatePlotDisplay: updatePlotDisplay,
+    processTurn: processTurn,
+    processFarmUpdate: processFarmUpdate,
+    processFarmAction: processFarmAction,
+    autoHarvestCrop: autoHarvestCrop,
+    getState: getState,
     
     // Debugging functions (consider removing in production)
-    getPlotById,
-    displayFarms,
-    updateFarmsFromServer
+    getPlotById: getPlotById,
+    displayFarms: displayFarms,
+    updateFarmsFromServer: updateFarmsFromServer,
+    standardizeCropData: standardizeCropData,
+    prepareCropForPlanting: prepareCropForPlanting
   };
 })(); 

@@ -316,7 +316,7 @@ const UIManager = (function() {
   }
   
   /**
-   * Show the plant selector overlay for the selected plot
+   * Show the plant selector overlay for a plot
    * @param {string} plotId - The ID of the plot to plant in
    */
   function showPlantSelector(plotId) {
@@ -352,20 +352,16 @@ const UIManager = (function() {
           // Extract plot index from plot ID
           const plotIndex = parseInt(selectedPlotId.split('-').pop());
           
-          // Get crop data from GameConfig
-          const cropData = GameConfig.crops[cropType];
+          // Use FarmManager's prepareCropForPlanting function to get standardized crop data
+          const cropDataForPlanting = FarmManager.prepareCropForPlanting(cropType);
           
-          // Create a proper crop data object with all required properties
-          const cropDataForPlanting = {
-            type: cropType,
-            cost: cropData.cost,
-            growthTime: cropData.turnsTillHarvest,
-            yield: cropData.yield,
-            name: cropData.name,
-            emoji: cropData.emoji
-          };
+          if (!cropDataForPlanting) {
+            console.error(`Failed to prepare crop data for ${cropType}`);
+            showMessage(`Error preparing crop data. Please try again.`);
+            return;
+          }
           
-          console.log('Prepared crop data for planting:', cropDataForPlanting);
+          console.log('Prepared standardized crop data for planting:', cropDataForPlanting);
           
           // Plant the crop
           FarmManager.plantCrop(playerColor, plotIndex, cropDataForPlanting);
@@ -397,8 +393,14 @@ const UIManager = (function() {
         <h3>Select a Crop to Plant</h3>
     `;
     
-    // Add each crop option
-    Object.entries(GameConfig.crops).forEach(([cropType, cropData]) => {
+    // Add each crop option with standardized property names
+    Object.entries(GameConfig.crops).forEach(([cropType, cropConfig]) => {
+      // Use FarmManager's standardizeCropData to get consistent properties
+      const cropData = FarmManager.standardizeCropData({
+        type: cropType,
+        ...cropConfig
+      });
+      
       const canAfford = currentWheat >= cropData.cost;
       const disabledClass = canAfford ? '' : 'disabled';
       
@@ -407,7 +409,7 @@ const UIManager = (function() {
           <div class="plant-emoji">${cropData.emoji}</div>
           <div class="plant-details">
             <div class="plant-name">${cropData.name}</div>
-            <div class="plant-info">Cost: ${cropData.cost} wheat | Harvest: ${cropData.yield} wheat | Growth: ${cropData.turnsTillHarvest} turns</div>
+            <div class="plant-info">Cost: ${cropData.cost} wheat | Harvest: ${cropData.yield} wheat | Growth: ${cropData.growthTime} turns</div>
           </div>
         </button>
       `;
