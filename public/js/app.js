@@ -17,6 +17,12 @@ const screens = {
   game: document.getElementById('game-screen')
 };
 
+// LocalStorage keys
+const STORAGE_KEYS = {
+  GAME_STATE: 'chessFarm_gameState',
+  RECONNECT_TIMER: 'chessFarm_reconnectTimer'
+};
+
 // Initialize the game
 document.addEventListener('DOMContentLoaded', function() {
   // Setup event listeners
@@ -25,7 +31,77 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initialize socket connection
   socket = io();
   setupSocketListeners();
+  
+  // Check for saved game state and attempt to reconnect
+  tryReconnect();
 });
+
+// Try to reconnect to a previous game if session data exists
+function tryReconnect() {
+  try {
+    // Check if we have saved game state
+    const savedState = localStorage.getItem(STORAGE_KEYS.GAME_STATE);
+    if (!savedState) return;
+    
+    const gameState = JSON.parse(savedState);
+    
+    // Check if the saved state is still valid (within last 5 minutes)
+    const now = Date.now();
+    const reconnectTimer = localStorage.getItem(STORAGE_KEYS.RECONNECT_TIMER);
+    const timeout = reconnectTimer ? parseInt(reconnectTimer) : 5 * 60 * 1000; // Default 5 minutes
+    
+    if (gameState.timestamp && (now - gameState.timestamp > timeout)) {
+      // Saved state is too old, clear it
+      localStorage.removeItem(STORAGE_KEYS.GAME_STATE);
+      return;
+    }
+    
+    console.log('Found saved game state, attempting to reconnect...', gameState);
+    
+    // Update UI to show reconnection attempt
+    showMessage('Attempting to reconnect to your previous game...', 'info');
+    
+    // Use saved state to try to reconnect
+    if (gameState.roomId && gameState.color && gameState.username) {
+      socket.emit('joinGame', {
+        username: gameState.username,
+        roomId: gameState.roomId,
+        isReconnecting: true,
+        previousColor: gameState.color
+      });
+      
+      // Show waiting screen during reconnection attempt
+      showScreen('waiting');
+      const roomCodeDisplay = document.getElementById('room-code-display');
+      if (roomCodeDisplay) {
+        roomCodeDisplay.textContent = gameState.roomId;
+      }
+    }
+  } catch (error) {
+    console.error('Error trying to reconnect:', error);
+    // Clear any corrupted data
+    localStorage.removeItem(STORAGE_KEYS.GAME_STATE);
+  }
+}
+
+// Save current game state to localStorage for potential reconnection
+function saveGameState() {
+  if (!roomId || !playerColor) return;
+  
+  const gameState = {
+    roomId: roomId,
+    color: playerColor,
+    username: username,
+    timestamp: Date.now()
+  };
+  
+  localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify(gameState));
+}
+
+// Clear saved game state
+function clearGameState() {
+  localStorage.removeItem(STORAGE_KEYS.GAME_STATE);
+}
 
 // Setup all socket event listeners
 function setupSocketListeners() {
@@ -36,7 +112,7 @@ function setupSocketListeners() {
   
   socket.on('disconnect', () => {
     console.log('Disconnected from server');
-    showMessage('Connection lost. Please refresh the page.', 'error');
+    showMessage('Connection lost. Attempting to reconnect...', 'warning');
   });
   
   // Game events
@@ -46,10 +122,14 @@ function setupSocketListeners() {
   socket.on('your-turn', handleYourTurn);
   socket.on('game-over', handleGameOver);
   socket.on('opponent-disconnected', handleOpponentDisconnected);
+  socket.on('opponent-reconnected', handleOpponentReconnected);
+  socket.on('reconnectSuccess', handleReconnectSuccess);
   socket.on('opponentLeft', handleOpponentDisconnected);
   socket.on('error', handleErrorMessage);
   socket.on('roomFull', (data) => {
     showMessage(`Room ${data.roomId} is full. Please try another room.`, 'error');
+    // If we were trying to reconnect, clear the saved state
+    clearGameState();
   });
   socket.on('gameStateUpdate', (data) => {
     console.log('Game state update received:', data);
@@ -69,27 +149,59 @@ function setupSocketListeners() {
   });
 }
 
-// Handle joining a game room
-function joinGame() {
-  username = document.getElementById('username').value.trim();
-  const roomInput = document.getElementById('room-id').value.trim();
+// Handle successful reconnection to a game
+function handleReconnectSuccess(data) {
+  console.log('Successfully reconnected to game:', data);
   
-  if (!username) {
-    alert('Please enter your name');
-    return;
+  // Set or restore game state
+  roomId = data.roomId;
+  playerColor = data.color;
+  currentTurn = data.currentTurn;
+  
+  // Update saved state timestamp
+  saveGameState();
+  
+  // Update UI
+  document.getElementById('room-id-display').textContent = roomId;
+  document.getElementById('player-color').textContent = playerColor;
+  
+  // Show game screen
+  showScreen('game');
+  
+  // Setup chess board if not already set up
+  if (!board || !game) {
+    setupChessGame();
+  } else {
+    // Update board with current game state
+    if (data.gameState && data.gameState.chessEngineState) {
+      game.load(data.gameState.chessEngineState);
+      board.position(game.fen());
+      board.orientation(playerColor);
+    }
   }
   
-  // Join or create a room
-  socket.emit('joinGame', { 
-    username: username,
-    roomId: roomInput || null // If no room ID is provided, create a new room
-  });
+  // Update UI based on current turn
+  updateTurnIndicator();
+  setupGameUI();
+  
+  showMessage('Successfully reconnected to your game!', 'success');
+}
+
+// Handle opponent reconnected event
+function handleOpponentReconnected(data) {
+  console.log('Opponent reconnected:', data);
+  showMessage('Your opponent has reconnected to the game.', 'success');
+  document.getElementById('game-status').textContent = 'Game in progress';
 }
 
 // Handle room joined event
 function handleRoomJoined(data) {
   roomId = data.roomId;
   playerColor = data.color;
+  username = data.username || username;
+  
+  // Save this game state for potential reconnection
+  saveGameState();
   
   // Update UI
   document.getElementById('room-code-display').textContent = roomId;
@@ -103,28 +215,28 @@ function handleRoomJoined(data) {
 
 // Handle game start event
 function handleGameStart(data) {
-  console.log('Game start received:', data);
-  playerColor = data.playerColor || playerColor;
+  console.log('Game starting:', data);
+  
   isGameActive = true;
   
-  // Update UI
-  document.getElementById('player-color').textContent = 
-    playerColor.charAt(0).toUpperCase() + playerColor.slice(1);
-  
-  // Initialize chess game
+  // Setup the chess board
   setupChessGame();
   
-  // Show game screen and setup game UI
+  // Show the game screen
   showScreen('game');
+  
+  // Setup game UI
   setupGameUI();
   
-  // Update turn indicator
-  if (data.currentTurn) {
-    currentTurn = data.currentTurn;
-  }
+  // Update UI based on whose turn it is
   updateTurnIndicator();
   
-  showMessage(`Game started! You are playing as ${playerColor}.`);
+  // You are white, it's your turn
+  if (playerColor === 'white') {
+    showMessage('Game started! Make your first move');
+  } else {
+    showMessage('Game started! Waiting for opponent to make the first move');
+  }
 }
 
 // Handle opponent move event
@@ -174,14 +286,15 @@ function handleGameOver(data) {
 }
 
 // Handle opponent disconnected event
-function handleOpponentDisconnected() {
-  showMessage('Your opponent has disconnected.', 'error');
+function handleOpponentDisconnected(data) {
+  console.log('Opponent disconnected:', data);
+  showMessage('Your opponent has disconnected. They have 5 minutes to reconnect before the game is forfeit.', 'warning');
   document.getElementById('game-status').textContent = 'Opponent disconnected';
 }
 
 // Handle error messages from server
 function handleErrorMessage(data) {
-  showMessage(data.message, 'error');
+  showMessage(data.message || 'An error occurred', 'error');
 }
 
 // Setup the chess game board and engine
@@ -522,4 +635,28 @@ function updatePhaseDisplay() {
 // Update wheat count display
 function updateWheatDisplay() {
   document.getElementById('wheat-count').textContent = wheatCount;
+}
+
+// Modify joinGame function to handle manual room joining
+function joinGame() {
+  const usernameInput = document.getElementById('username').value.trim();
+  const roomIdInput = document.getElementById('room-id').value.trim();
+  
+  // Validate username
+  if (!usernameInput) {
+    showMessage('Please enter your name', 'error');
+    return;
+  }
+  
+  username = usernameInput;
+  
+  // Clear any previous game state when manually joining
+  clearGameState();
+  
+  // Join game room
+  socket.emit('joinGame', {
+    username: username,
+    roomId: roomIdInput,
+    isReconnecting: false
+  });
 } 

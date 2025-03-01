@@ -53,8 +53,10 @@ app.use(express.static(__dirname));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
 
-// Game rooms storage
+// Global variables
 const gameRooms = {};
+const disconnectedPlayers = {}; // Store information about disconnected players
+const PLAYER_RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Admin panel routes
 app.get('/admin', (req, res) => {
@@ -145,7 +147,7 @@ io.on('connection', (socket) => {
   // Handle joining a game
   socket.on('joinGame', (data) => {
     try {
-      const { username, roomId } = data;
+      const { username, roomId, isReconnecting, previousColor } = data;
       let gameRoomId = roomId;
       
       // If no room ID is provided, create a new one
@@ -156,15 +158,16 @@ io.on('connection', (socket) => {
         // Initialize the new game room
         gameRooms[gameRoomId] = {
           id: gameRoomId,
-        players: {},
+          players: {},
           playerCount: 0,
           gameState: {
             chessEngineState: new Chess().fen(),
             isGameOver: false,
             winner: null
           },
-        currentTurn: 'white'
-      };
+          currentTurn: 'white',
+          disconnectedPlayers: {} // Track disconnected players in this room
+        };
       }
       
       // Check if the room exists - if not, create it (useful for rejoining specific rooms)
@@ -179,19 +182,64 @@ io.on('connection', (socket) => {
             isGameOver: false,
             winner: null
           },
-          currentTurn: 'white'
+          currentTurn: 'white',
+          disconnectedPlayers: {} // Track disconnected players in this room
         };
+      }
+      
+      // Handle reconnection attempt
+      let playerColor;
+      if (isReconnecting && previousColor && gameRooms[gameRoomId].disconnectedPlayers[previousColor]) {
+        // Player is trying to reconnect to a game
+        log('INFO', `Player ${socket.id} attempting to reconnect as ${previousColor} in room ${gameRoomId}`);
+        
+        playerColor = previousColor;
+        const isFirstPlayer = playerColor === 'white';
+        
+        // Remove from disconnected players list
+        delete gameRooms[gameRoomId].disconnectedPlayers[playerColor];
+        
+        // Add player back to the room
+        gameRooms[gameRoomId].players[socket.id] = {
+          id: socket.id,
+          username: username || 'Player',
+          color: playerColor
+        };
+        
+        // Increment player count
+        gameRooms[gameRoomId].playerCount++;
+        
+        // Join the Socket.io room
+        socket.join(gameRoomId);
+        
+        log('INFO', `Player ${socket.id} successfully reconnected to room ${gameRoomId} as ${playerColor}`);
+        
+        // Notify player they've reconnected
+        socket.emit('reconnectSuccess', {
+          roomId: gameRoomId,
+          color: playerColor,
+          gameState: gameRooms[gameRoomId].gameState,
+          currentTurn: gameRooms[gameRoomId].currentTurn
+        });
+        
+        // Notify other player that opponent has reconnected
+        socket.to(gameRoomId).emit('opponent-reconnected', {
+          color: playerColor
+        });
+        
+        return;
       }
       
       // Check if the room is full
       if (Object.keys(gameRooms[gameRoomId].players).length >= 2) {
+        // If someone tries to reconnect but didn't provide correct info, reject
         log('WARN', `Room ${gameRoomId} is full`);
         socket.emit('roomFull', { roomId: gameRoomId });
         return;
       }
       
       // Determine player color (first player is white, second is black)
-      const playerColor = gameRooms[gameRoomId].playerCount === 0 ? 'white' : 'black';
+      playerColor = gameRooms[gameRoomId].playerCount === 0 ? 'white' : 'black';
       const isFirstPlayer = playerColor === 'white';
       
       // Add player to the room
@@ -238,14 +286,11 @@ io.on('connection', (socket) => {
           });
         }
       } else {
-        // Notify the player they're waiting for an opponent
-        socket.emit('waitingForOpponent', {
-          roomId: gameRoomId
-        });
+        log('INFO', `Waiting for another player to join room ${gameRoomId}`);
       }
     } catch (error) {
-      log('ERROR', 'Error handling joinGame:', error);
-      socket.emit('error', { message: 'Failed to join game' });
+      log('ERROR', 'Error joining game:', error);
+      socket.emit('error', { message: 'Error joining game' });
     }
   });
   
@@ -339,23 +384,40 @@ io.on('connection', (socket) => {
     
     // Find any game rooms this player is in
     for (const roomId in gameRooms) {
-      if (gameRooms[roomId].players[socket.id]) {
-        const color = gameRooms[roomId].players[socket.id].color;
+      const room = gameRooms[roomId];
+      if (room.players[socket.id]) {
+        const playerInfo = room.players[socket.id];
+        const color = playerInfo.color;
         
         log('INFO', `Player ${socket.id} (${color}) left room ${roomId}`);
         
-        // Remove the player
-        delete gameRooms[roomId].players[socket.id];
-        gameRooms[roomId].playerCount--;
+        // Instead of immediately removing, mark as disconnected with a timestamp
+        room.disconnectedPlayers[color] = {
+          username: playerInfo.username,
+          timestamp: Date.now(),
+          timeToLive: PLAYER_RECONNECT_TIMEOUT
+        };
+        
+        // Remove the player from active players
+        delete room.players[socket.id];
+        room.playerCount--;
         
         // Notify other players in the room
-        socket.to(roomId).emit('opponent-disconnected');
+        socket.to(roomId).emit('opponent-disconnected', { color: color });
         
-        // If no players remain, clean up the room
-        if (gameRooms[roomId].playerCount === 0) {
-          log('INFO', `Deleting empty room ${roomId}`);
-          delete gameRooms[roomId];
-        }
+        // Set a timer to clean up if the player doesn't reconnect
+        setTimeout(() => {
+          if (room.disconnectedPlayers[color]) {
+            log('INFO', `Cleanup: Player ${color} did not reconnect to room ${roomId} within timeout period`);
+            delete room.disconnectedPlayers[color];
+            
+            // If both players are gone (one disconnected, one timed out), clean up the room
+            if (room.playerCount === 0 && Object.keys(room.disconnectedPlayers).length === 0) {
+              log('INFO', `Deleting empty room ${roomId}`);
+              delete gameRooms[roomId];
+            }
+          }
+        }, PLAYER_RECONNECT_TIMEOUT);
       }
     }
   });

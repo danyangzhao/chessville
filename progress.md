@@ -1662,3 +1662,116 @@ This error occurred in the `skipCurrentGamePhase` function in `game-state.js`. T
 The issue was fixed by removing the line `const playerColor = getPlayerColor();` and having the code directly use the `playerColor` variable that's already in scope within the module.
 
 This error was causing problems when auto-skipping the farming phase after planting, and in the "Skip Farming" button functionality.
+
+## Reconnection Functionality Implementation (2025-03-03)
+
+### Issue: Players Cannot Rejoin Game After Disconnection
+**Status:** Fixed
+**Description:** When a player refreshes the page or disconnects, they lose their game state and cannot rejoin the same game even with the correct room code. This leads to game abandonment and poor user experience.
+
+**Diagnosis:** The original implementation immediately removed players from the room when they disconnected, without any mechanism to track their previous game state or allow reconnection with the same player identity.
+
+**Solution:** Implemented a comprehensive reconnection system that allows players to rejoin their game after disconnection:
+
+1. **Server-Side Changes:**
+   - Added a tracking system for disconnected players with a configurable time-to-live (5 minutes by default)
+   - Modified the `joinGame` handler to check for reconnection attempts and restore player state
+   - Added new socket events for reconnection success and opponent reconnection
+   - Implemented a cleanup mechanism that only deletes game rooms after both players are permanently gone
+
+```javascript
+// Store information about disconnected players
+const disconnectedPlayers = {};
+const PLAYER_RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// In gameRooms structure, added disconnectedPlayers tracking
+gameRooms[gameRoomId] = {
+  // ... existing properties ...
+  disconnectedPlayers: {} // Track disconnected players in this room
+};
+
+// Handle reconnection attempt in joinGame event
+if (isReconnecting && previousColor && gameRooms[gameRoomId].disconnectedPlayers[previousColor]) {
+  // Player is trying to reconnect to a game
+  log('INFO', `Player ${socket.id} attempting to reconnect as ${previousColor} in room ${gameRoomId}`);
+  
+  playerColor = previousColor;
+  // Remove from disconnected players list
+  delete gameRooms[gameRoomId].disconnectedPlayers[playerColor];
+  
+  // Add player back to the room and notify them
+  // ... code for restoring player state ...
+  
+  socket.emit('reconnectSuccess', {
+    roomId: gameRoomId,
+    color: playerColor,
+    gameState: gameRooms[gameRoomId].gameState,
+    currentTurn: gameRooms[gameRoomId].currentTurn
+  });
+}
+```
+
+2. **Client-Side Changes:**
+   - Implemented localStorage to save essential game state (room ID, player color, username)
+   - Added automatic reconnection attempt when the page loads if a saved game exists
+   - Added UI feedback during reconnection process
+   - New handlers for reconnection-related socket events
+
+```javascript
+// LocalStorage keys
+const STORAGE_KEYS = {
+  GAME_STATE: 'chessFarm_gameState',
+  RECONNECT_TIMER: 'chessFarm_reconnectTimer'
+};
+
+// Save current game state to localStorage for potential reconnection
+function saveGameState() {
+  if (!roomId || !playerColor) return;
+  
+  const gameState = {
+    roomId: roomId,
+    color: playerColor,
+    username: username,
+    timestamp: Date.now()
+  };
+  
+  localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify(gameState));
+}
+
+// Try to reconnect to a previous game if session data exists
+function tryReconnect() {
+  try {
+    const savedState = localStorage.getItem(STORAGE_KEYS.GAME_STATE);
+    if (!savedState) return;
+    
+    const gameState = JSON.parse(savedState);
+    // Check if the saved state is still valid (within timeout period)
+    // ... validation code ...
+    
+    // Attempt to reconnect with saved credentials
+    socket.emit('joinGame', {
+      username: gameState.username,
+      roomId: gameState.roomId,
+      isReconnecting: true,
+      previousColor: gameState.color
+    });
+  } catch (error) {
+    // Handle reconnection errors
+  }
+}
+```
+
+3. **User Experience Improvements:**
+   - Added informative messages when players disconnect and reconnect
+   - Set a 5-minute window for players to rejoin before their slot is released
+   - Added visual feedback to show reconnection status
+
+This implementation ensures that if a player accidentally refreshes their browser or temporarily loses connection, they can seamlessly rejoin the same game without disrupting gameplay. The opponent is notified about the disconnection and subsequent reconnection, providing transparency about the game state.
+
+**Date Fixed:** 2025-03-03
+
+## Next Steps
+1. Further enhance the reconnection mechanism with more detailed game state preservation (wheat count, farm state)
+2. Add an automatic reconnection attempt if the websocket connection drops but the page is still open
+3. Implement a forfeit system if a player doesn't reconnect within the timeout period
+4. Add an option for the remaining player to claim victory if their opponent disconnects for too long
