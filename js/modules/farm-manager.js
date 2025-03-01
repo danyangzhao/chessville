@@ -778,6 +778,15 @@ const FarmManager = (function() {
       // Mark this plot as available for immediate planting
       plot.canPlantAfterHarvest = true;
       
+      // Add more detailed debugging for just-harvested plots
+      console.log(`Set canPlantAfterHarvest=true for plot ${plot.id}`);
+      console.log(`Plot details after harvest:`, {
+        id: plot.id,
+        state: plot.state,
+        player: plot.player,
+        canPlantAfterHarvest: plot.canPlantAfterHarvest
+      });
+      
       console.log(`AUTO-HARVEST for plot ${plot.id}: ${success ? 'SUCCESSFUL' : 'PARTIALLY FAILED'} - plot cleared and available for planting`);
       return success;
     } catch (error) {
@@ -1287,6 +1296,38 @@ const FarmManager = (function() {
     return emptyUnlockedPlotsCount === 0;
   }
   
+  /**
+   * Check if a player has any plots that were just harvested and available for immediate planting
+   * @param {string} playerColor - The player color ('white' or 'black')
+   * @returns {boolean} True if there are any just harvested plots
+   */
+  function hasJustHarvestedPlots(playerColor) {
+    if (!farms[playerColor]) {
+      console.error(`Invalid player color: ${playerColor}`);
+      return false;
+    }
+    
+    // Log all plots to help debug
+    console.log(`Checking for just harvested plots for ${playerColor}:`);
+    farms[playerColor].plots.forEach((plot, index) => {
+      console.log(`Plot ${playerColor}-plot-${index}:`, {
+        id: plot.id,
+        state: plot.state,
+        canPlantAfterHarvest: plot.canPlantAfterHarvest || false
+      });
+    });
+    
+    // Count plots that were just harvested
+    const justHarvestedPlotsCount = farms[playerColor].plots.filter(plot => 
+      plot.canPlantAfterHarvest === true
+    ).length;
+    
+    console.log(`Player ${playerColor} has ${justHarvestedPlotsCount} just harvested plots available for planting`);
+    
+    // If there are any just harvested plots, return true
+    return justHarvestedPlotsCount > 0;
+  }
+  
   // Public API
   return {
     initialize: initialize,
@@ -1308,6 +1349,7 @@ const FarmManager = (function() {
     updateFarmsFromServer: updateFarmsFromServer,
     standardizeCropData: standardizeCropData,
     prepareCropForPlanting: prepareCropForPlanting,
-    areAllUnlockedPlotsFull: areAllUnlockedPlotsFull
+    areAllUnlockedPlotsFull: areAllUnlockedPlotsFull,
+    hasJustHarvestedPlots: hasJustHarvestedPlots
   };
 })(); 

@@ -559,12 +559,24 @@ const SocketManager = (function() {
           if (typeof FarmManager.areAllUnlockedPlotsFull === 'function' && 
               GameState.getCurrentGamePhase() === 'farming') {
             const playerColor = GameState.getPlayerColor();
-            if (FarmManager.areAllUnlockedPlotsFull(playerColor)) {
+            
+            // MODIFICATION: Only auto-skip if all plots are full AND there are no just-harvested plots
+            const allPlotsFull = FarmManager.areAllUnlockedPlotsFull(playerColor);
+            const hasJustHarvestedPlots = typeof FarmManager.hasJustHarvestedPlots === 'function' && 
+                                         FarmManager.hasJustHarvestedPlots(playerColor);
+            
+            console.log(`Auto-skip check: allPlotsFull=${allPlotsFull}, hasJustHarvestedPlots=${hasJustHarvestedPlots}`);
+            
+            // Only auto-skip if all plots are full AND there are no just-harvested plots
+            if (allPlotsFull && !hasJustHarvestedPlots) {
               console.log('All plots are full after turn processing - auto-skipping farming phase');
               setTimeout(() => {
                 GameState.skipCurrentGamePhase();
                 UIManager.showMessage('Auto-skipped farming phase - all plots are full!', 3000);
               }, 500);
+            } else if (hasJustHarvestedPlots) {
+              console.log('Not auto-skipping - detected plots that were just harvested and available for planting');
+              UIManager.showMessage('You have plots that were just harvested! You can plant on them this turn.', 3000);
             }
           }
         }

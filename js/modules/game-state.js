@@ -183,6 +183,23 @@ const GameState = (function() {
    */
   function skipCurrentGamePhase() {
     if (currentGamePhase === 'farming') {
+      // Check if there are any just-harvested plots available for planting
+      let hasJustHarvestedPlots = false;
+      if (typeof FarmManager !== 'undefined' && 
+          typeof FarmManager.hasJustHarvestedPlots === 'function') {
+        const playerColor = getPlayerColor();
+        hasJustHarvestedPlots = FarmManager.hasJustHarvestedPlots(playerColor);
+        
+        if (hasJustHarvestedPlots) {
+          console.log('Not skipping farming phase - player has plots that were just harvested');
+          if (typeof UIManager !== 'undefined' && typeof UIManager.showMessage === 'function') {
+            UIManager.showMessage('You have plots that were just harvested! You can plant on them this turn.', 3000);
+          }
+          // We'll only allow manual skipping in this case, not auto-skipping
+          return;
+        }
+      }
+      
       // Mark farming phase as completed
       gamePhaseCompleted.farming = true;
       

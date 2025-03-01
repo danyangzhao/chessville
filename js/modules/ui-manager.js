@@ -263,9 +263,18 @@ const UIManager = (function() {
     if (phase === 'farming' && GameState.isPlayerTurn()) {
       const playerColor = GameState.getPlayerColor();
       
-      // Check if all unlocked plots are full
-      if (typeof FarmManager !== 'undefined' && typeof FarmManager.areAllUnlockedPlotsFull === 'function') {
-        if (FarmManager.areAllUnlockedPlotsFull(playerColor)) {
+      // Check if all unlocked plots are full and if there are any just-harvested plots
+      if (typeof FarmManager !== 'undefined' && 
+          typeof FarmManager.areAllUnlockedPlotsFull === 'function') {
+        
+        const allPlotsFull = FarmManager.areAllUnlockedPlotsFull(playerColor);
+        const hasJustHarvestedPlots = typeof FarmManager.hasJustHarvestedPlots === 'function' && 
+                                     FarmManager.hasJustHarvestedPlots(playerColor);
+        
+        console.log(`UI auto-skip check: allPlotsFull=${allPlotsFull}, hasJustHarvestedPlots=${hasJustHarvestedPlots}`);
+        
+        // Only auto-skip if all plots are full AND there are no just-harvested plots
+        if (allPlotsFull && !hasJustHarvestedPlots) {
           console.log('All unlocked plots are full - auto-skipping farming phase');
           
           // We need to wait a bit for the UI to update before skipping
@@ -276,6 +285,17 @@ const UIManager = (function() {
             showMessage('Auto-skipped farming phase - all plots are full!', 3000);
             return;
           }, 500);
+        } else if (hasJustHarvestedPlots) {
+          console.log('Not auto-skipping - detected plots that were just harvested and available for planting');
+          // Only show this message once to avoid spam
+          if (!window.justHarvestedMessageShown) {
+            showMessage('You have plots that were just harvested! You can plant on them this turn.', 3000);
+            window.justHarvestedMessageShown = true;
+            // Reset the flag after a delay
+            setTimeout(() => {
+              window.justHarvestedMessageShown = false;
+            }, 5000);
+          }
         }
       }
     }
@@ -524,6 +544,38 @@ const UIManager = (function() {
     gameOverBanner.style.display = 'flex';
   }
   
+  /**
+   * Show a message to the user
+   * @param {string} message - The message to show
+   * @param {number} duration - The duration to show the message in milliseconds
+   */
+  function showMessage(message, duration = 3000) {
+    // Use the global showMessage function if it exists
+    if (typeof window.showMessage === 'function') {
+      window.showMessage(message, duration);
+    } else {
+      // Fallback implementation
+      const messageElement = document.getElementById('message');
+      if (!messageElement) {
+        console.warn('Message element not found');
+        return;
+      }
+      
+      messageElement.textContent = message;
+      messageElement.classList.add('show');
+      
+      // Clear any existing timeout
+      if (messageElement.timeoutId) {
+        clearTimeout(messageElement.timeoutId);
+      }
+      
+      // Hide the message after the duration
+      messageElement.timeoutId = setTimeout(() => {
+        messageElement.classList.remove('show');
+      }, duration);
+    }
+  }
+  
   // Public API
   return {
     initialize,
@@ -535,6 +587,7 @@ const UIManager = (function() {
     updateResourceDisplay,
     setupGameUI,
     showPlantSelector,
-    showGameOver
+    showGameOver,
+    showMessage
   };
 })(); 
