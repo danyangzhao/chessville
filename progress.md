@@ -1453,3 +1453,11 @@ The next steps for development include:
 - Implementing additional UI improvements
 - Adding tutorial elements to guide new players
 - Considering additional farm features like different crop types or upgrades
+
+## Fix for "getPlayerColor is not defined" error
+
+This error occurred in the `skipCurrentGamePhase` function in `game-state.js`. The function was trying to call `getPlayerColor()` as if it were a global function, but it should have been using the module's private `playerColor` variable directly since it was within the same closure.
+
+The issue was fixed by removing the line `const playerColor = getPlayerColor();` and having the code directly use the `playerColor` variable that's already in scope within the module.
+
+This error was causing problems when auto-skipping the farming phase after planting, and in the "Skip Farming" button functionality.

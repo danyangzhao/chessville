@@ -187,7 +187,6 @@ const GameState = (function() {
       let hasJustHarvestedPlots = false;
       if (typeof FarmManager !== 'undefined' && 
           typeof FarmManager.hasJustHarvestedPlots === 'function') {
-        const playerColor = getPlayerColor();
         hasJustHarvestedPlots = FarmManager.hasJustHarvestedPlots(playerColor);
         
         if (hasJustHarvestedPlots) {
