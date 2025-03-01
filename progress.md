@@ -1216,3 +1216,90 @@ console.log(`Plot ${playerColor}-plot-${plotIndex} turnsToHarvest set to: ${stan
 - Improved code clarity with separate handling for initialization and turn progression
 
 **Date Fixed:** 2025-03-03
+
+## Waiting Room UI Disappearance After Room ID Entry (Current Date)
+
+### Issue: Waiting Room UI Not Displayed After User Enters a Room ID
+**Status:** Fixed
+
+**Description:** After a user entered a room ID, the waiting room UI that should display while waiting for the opponent to join was being skipped, causing users to be confused about the state of the game.
+
+**Diagnosis:** After examining the codebase, I found that there was a mismatch between the legacy code in `app.js` and the newer modular architecture:
+
+1. In the legacy code (app.js), the `handleRoomJoined` function properly called `showScreen('waiting')` to display the waiting screen.
+2. In the newer modular code, the socket event handlers in `socket-manager.js` were not consistently showing the waiting screen after a room was joined.
+3. The `joinRoom` function in `socket-manager.js` was emitting the `joinGame` event but not transitioning to the waiting screen.
+4. When the server responded with the `playerAssigned` event, the client immediately updated the game status without explicitly showing the waiting screen.
+
+**Solution:** Made several key changes to ensure the waiting screen is properly displayed:
+
+1. Updated the `joinRoom` function in `socket-manager.js` to explicitly show the waiting screen right after emitting the `joinGame` event:
+```javascript
+socket.emit('joinGame', {
+  username: username,
+  roomId: roomId
+});
+
+// Show the waiting screen while waiting for server response
+UIManager.showScreen('waiting-screen');
+
+// Update room code display if it exists
+const roomCodeDisplay = document.getElementById('room-code-display');
+if (roomCodeDisplay && roomId) {
+  roomCodeDisplay.textContent = roomId;
+}
+```
+
+2. Enhanced the `playerAssigned` event handler to explicitly show the waiting screen and update the room code:
+```javascript
+socket.on('playerAssigned', (data) => {
+  console.log('Player assigned to room:', data);
+  roomId = data.roomId;
+  
+  // Initialize the game with the provided data
+  GameState.setupGame(data.roomId, data.color);
+  UIManager.setupGameUI(data.roomId, data.color);
+  
+  // Keep showing the waiting screen
+  UIManager.showScreen('waiting-screen');
+  
+  // Update room code display
+  const roomCodeDisplay = document.getElementById('room-code-display');
+  if (roomCodeDisplay) {
+    roomCodeDisplay.textContent = data.roomId;
+  }
+  
+  // Waiting for opponent
+  UIManager.updateGameStatus('Waiting for opponent...');
+});
+```
+
+3. Added extensive debug logging to the `showScreen` function in `ui-manager.js` to help diagnose any issues with screen transitions:
+```javascript
+console.log(`Showing screen: ${screenId}`, 'Current screen:', currentScreen);
+
+// Debug log the current state of all screens to diagnose issues
+['login-screen', 'waiting-screen', 'game-screen'].forEach(id => {
+  const element = document.getElementById(id);
+  if (element) {
+    console.log(`Screen ${id} is currently ${element.classList.contains('hidden') ? 'hidden' : 'visible'}`);
+  } else {
+    console.warn(`Debug: Screen element ${id} not found in DOM`);
+  }
+});
+```
+
+**Benefits:**
+- Users now see the waiting room UI after entering a room ID
+- The room code is properly displayed in the waiting screen, making it easier for users to share with opponents
+- The screen transition flow is more intuitive, with clearer visual feedback
+- Additional logging helps diagnose any future issues with screen transitions
+- The fix maintains compatibility with both the legacy and modular code architectures
+
+**Date Fixed:** Current Date
+
+## Current Development Focus
+- Continue improving user experience with clear UI transitions
+- Enhance mobile responsiveness for all game screens
+- Add visual feedback to indicate game state changes
+- Refine error handling for edge cases

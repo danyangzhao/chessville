@@ -123,11 +123,24 @@ const UIManager = (function() {
       return;
     }
     
+    console.log(`Showing screen: ${screenId}`, 'Current screen:', currentScreen);
+    
+    // Debug log the current state of all screens to diagnose issues
+    ['login-screen', 'waiting-screen', 'game-screen'].forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        console.log(`Screen ${id} is currently ${element.classList.contains('hidden') ? 'hidden' : 'visible'}`);
+      } else {
+        console.warn(`Debug: Screen element ${id} not found in DOM`);
+      }
+    });
+    
     // Hide current screen
     if (currentScreen) {
       const currentScreenElement = document.getElementById(currentScreen);
       if (currentScreenElement) {
         currentScreenElement.classList.add('hidden');
+        console.log(`Hidden previous screen: ${currentScreen}`);
       }
     }
     
@@ -135,6 +148,9 @@ const UIManager = (function() {
     screen.classList.remove('hidden');
     currentScreen = screenId;
     console.log(`Screen changed to: ${screenId}`);
+    
+    // Debug check after change
+    console.log(`After change: is ${screenId} hidden?`, screen.classList.contains('hidden'));
   }
   
   /**

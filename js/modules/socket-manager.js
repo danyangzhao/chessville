@@ -69,6 +69,15 @@ const SocketManager = (function() {
       GameState.setupGame(data.roomId, data.color);
       UIManager.setupGameUI(data.roomId, data.color);
       
+      // Keep showing the waiting screen
+      UIManager.showScreen('waiting-screen');
+      
+      // Update room code display
+      const roomCodeDisplay = document.getElementById('room-code-display');
+      if (roomCodeDisplay) {
+        roomCodeDisplay.textContent = data.roomId;
+      }
+      
       // Waiting for opponent
       UIManager.updateGameStatus('Waiting for opponent...');
       
@@ -347,6 +356,15 @@ const SocketManager = (function() {
       username: username,
       roomId: roomId
     });
+    
+    // Show the waiting screen while waiting for server response
+    UIManager.showScreen('waiting-screen');
+    
+    // Update room code display if it exists
+    const roomCodeDisplay = document.getElementById('room-code-display');
+    if (roomCodeDisplay && roomId) {
+      roomCodeDisplay.textContent = roomId;
+    }
     
     UIManager.updateGameStatus('Joining game...');
   }
