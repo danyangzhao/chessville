@@ -1187,6 +1187,29 @@ const FarmManager = (function() {
     }
   }
   
+  /**
+   * Check if all unlocked plots for a player are full (planted/growing)
+   * Used to auto-skip farming phase if no planting actions are available
+   * @param {string} playerColor - The player color ('white' or 'black')
+   * @returns {boolean} True if all unlocked plots are full
+   */
+  function areAllUnlockedPlotsFull(playerColor) {
+    if (!farms[playerColor]) {
+      console.error(`Invalid player color: ${playerColor}`);
+      return false;
+    }
+    
+    // Count empty unlocked plots
+    const emptyUnlockedPlotsCount = farms[playerColor].plots.filter(plot => 
+      plot.state === PLOT_STATE.EMPTY
+    ).length;
+    
+    console.log(`Player ${playerColor} has ${emptyUnlockedPlotsCount} empty unlocked plots`);
+    
+    // If there are no empty plots, all plots are full
+    return emptyUnlockedPlotsCount === 0;
+  }
+  
   // Public API
   return {
     initialize: initialize,
@@ -1207,6 +1230,7 @@ const FarmManager = (function() {
     displayFarms: displayFarms,
     updateFarmsFromServer: updateFarmsFromServer,
     standardizeCropData: standardizeCropData,
-    prepareCropForPlanting: prepareCropForPlanting
+    prepareCropForPlanting: prepareCropForPlanting,
+    areAllUnlockedPlotsFull: areAllUnlockedPlotsFull
   };
 })(); 

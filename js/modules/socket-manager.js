@@ -553,6 +553,20 @@ const SocketManager = (function() {
           console.log('Farm state AFTER processing turn:', 
             typeof FarmManager.getState === 'function' ? 
             JSON.stringify(FarmManager.getState()) : 'getState not available');
+            
+          // After processing farm turn, check if we need to auto-skip farming phase
+          // This works alongside the check in updateGamePhaseIndicator but ensures it happens right after processing
+          if (typeof FarmManager.areAllUnlockedPlotsFull === 'function' && 
+              GameState.getCurrentGamePhase() === 'farming') {
+            const playerColor = GameState.getPlayerColor();
+            if (FarmManager.areAllUnlockedPlotsFull(playerColor)) {
+              console.log('All plots are full after turn processing - auto-skipping farming phase');
+              setTimeout(() => {
+                GameState.skipCurrentGamePhase();
+                UIManager.showMessage('Auto-skipped farming phase - all plots are full!', 3000);
+              }, 500);
+            }
+          }
         }
       } else {
         console.log('It is the OPPONENT\'s turn - Not processing your farm plots');

@@ -825,14 +825,15 @@
         </div>
       </div>
       
-      <div class="action-buttons">
-        <button id="skip-farming-button" class="action-button">Skip Farming</button>
-        <button id="end-turn-button" class="action-button" style="display: none;">End Turn</button>
-      </div>
-      
       <div class="main-game-area">
         <!-- Chess Board - Moved outside player-areas to be above farms -->
         <div class="chess-board" id="chess-board"></div>
+        
+        <!-- Moving the Skip Farming button here, below the chessboard -->
+        <div class="action-buttons" style="margin: 10px 0 20px 0;">
+          <button id="skip-farming-button" class="action-button" style="padding: 10px 20px; font-size: 16px;">Skip Farming</button>
+          <button id="end-turn-button" class="action-button" style="display: none;">End Turn</button>
+        </div>
         
         <!-- Player Areas (Farms) -->
         <div class="player-areas">

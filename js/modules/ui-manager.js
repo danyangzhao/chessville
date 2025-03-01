@@ -259,6 +259,27 @@ const UIManager = (function() {
       phase = GameState.getCurrentGamePhase();
     }
     
+    // Auto-skip farming phase if all plots are full
+    if (phase === 'farming' && GameState.isPlayerTurn()) {
+      const playerColor = GameState.getPlayerColor();
+      
+      // Check if all unlocked plots are full
+      if (typeof FarmManager !== 'undefined' && typeof FarmManager.areAllUnlockedPlotsFull === 'function') {
+        if (FarmManager.areAllUnlockedPlotsFull(playerColor)) {
+          console.log('All unlocked plots are full - auto-skipping farming phase');
+          
+          // We need to wait a bit for the UI to update before skipping
+          setTimeout(() => {
+            GameState.skipCurrentGamePhase();
+            // Update the phase display with the new phase
+            updateGamePhaseIndicator('chess');
+            showMessage('Auto-skipped farming phase - all plots are full!', 3000);
+            return;
+          }, 500);
+        }
+      }
+    }
+    
     // Update the phase display
     const phaseDisplay = document.getElementById('game-phase');
     if (phaseDisplay) {
