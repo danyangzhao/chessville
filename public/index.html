@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Chess Farm Game</title>
   
   <!-- External CSS -->
   <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="css/styles.css">
   
   <!-- External JavaScript libraries -->
@@ -39,8 +40,8 @@
     
     <div class="screen" id="waiting-screen" style="display: none;">
       <h1>Waiting for Opponent</h1>
+      <p>Share this room code with your opponent:</p>
       <p>Room Code: <span id="room-code-display"></span></p>
-      <p>Share this code with your opponent to let them join.</p>
       <div class="spinner"></div>
     </div>
     

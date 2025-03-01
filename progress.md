@@ -207,15 +207,216 @@ Issues resolved:
 
 Next development focus will be on ensuring proper game state synchronization between players and refining the farming mechanics.
 
-## Latest Updates (2025-03-01)
+## Latest Updates (2025-03-02)
 
-### Fixed Additional Issues
+### Improved UI and Mobile Responsiveness
 
-#### Issue: End Turn Button Still Present
-**Status:** Fixed
-**Description:** Despite previous changes to enforce mandatory chess moves each turn, the "End Turn" button was still visible during the chess phase.
-**Diagnosis:** The updateTurnIndicator function in the UI-manager.js file was still displaying the end turn button during the chess phase.
-**Solution:** Modified the updateTurnIndicator function to never display the end turn button, enforcing that players must make a chess move to end their turn:
+**Status:** Completed
+**Description:** Enhanced the user interface with better mobile responsiveness and visual design.
+**Details:**
+
+1. **Visual Improvements:**
+   - Implemented a consistent color scheme using CSS variables
+   - Added subtle animations and transitions for interactive elements
+   - Improved visual hierarchy and whitespace
+   - Added the Inter font family for better typography
+   - Enhanced button styles with hover and active states
+   - Added subtle shadows and rounded corners for depth
+   - Created notification styles with different states (success, warning, error)
+   - Added tooltip functionality for improved user guidance
+   - Improved focus states for better accessibility
+
+2. **Mobile Responsive Enhancements:**
+   - Reorganized layout for smaller screens with a mobile-first approach
+   - Moved the chess board to the top on mobile displays for better usability
+   - Made game controls and information sections stack vertically on small screens
+   - Adjusted font sizes and spacing for better readability on mobile devices
+   - Made the farm plots grid responsive with auto-fill for different screen sizes
+   - Improved the game header to wrap or stack on smaller screens
+   - Optimized chess board sizing for different screen widths
+   - Implemented touch-friendly button and input sizes (44px min-height)
+   - Added touch-action manipulation for improved touch experience on the chessboard
+
+3. **Specific Component Improvements:**
+   - Room code display now has better visual prominence with a dashed border
+   - Enhanced farm plots with subtle animations when ready for harvest
+   - Reorganized movement costs into a grid layout for better space utilization
+   - Added flex-wrap to action buttons to prevent overflow on small screens
+   - Limited viewport scaling for better touch interactions
+   - Improved wheat count display with better visual styling
+   - Added loading state styling for async operations
+
+These UI improvements enhance the overall user experience while maintaining all game functionality. The game is now more accessible on mobile devices while providing a more polished visual experience across all platforms.
+
+Next steps for UI enhancements could include:
+- Adding custom toast notifications for important game events
+- Implementing animated transitions between game phases
+- Adding subtle sound effects for actions (optional toggle)
+- Creating a dark mode theme option
+
+**Date Completed:** 2025-03-02
+
+## Project Merge and Heroku Deployment (2025-02-28)
+
+### Successful Merge to Main Branch
+The Chess Farm Game has been successfully merged from the development branch to the main `/chessville` directory. All files have been properly copied and the game is now functioning correctly in the main branch. The nested `chess-farm-game` directory has been removed to clean up the workspace.
+
+### Heroku Deployment Preparation
+To prepare the game for deployment to Heroku, the following steps have been taken:
+
+1. **Port Configuration**: The server has been configured to use `process.env.PORT` which allows Heroku to assign its own port:
+   ```javascript
+   const PORT = process.env.PORT || 3002;
+   ```
+
+2. **Procfile**: The Procfile is already set up to instruct Heroku how to run the application:
+   ```
+   web: node server.js
+   ```
+
+3. **Node.js Version**: The package.json includes a specification for the Node.js version to ensure compatibility with Heroku.
+
+4. **Dependencies**: All necessary dependencies are properly listed in package.json.
+
+The game is now ready for Heroku deployment. The next steps are to commit these changes to a Git repository and deploy to Heroku using their CLI or GitHub integration.
+
+## Heroku Deployment Issues (2025-02-28)
+
+The initial Heroku deployment encountered several issues that need to be resolved:
+
+### Issue: Chess.js Module Not Found Error
+**Status:** Needs Fix
+**Description:** The application crashes on Heroku with a module not found error for chess.js.
+**Diagnosis:** The error occurs because Heroku cannot find the expected file path for the chess.js module:
+```
+Error: Cannot find module '/app/node_modules/chess.js/dist/cjs/chess.js'. Please verify that the package.json has a valid "main" entry
+```
+**Solution:** Update the chess.js dependency version in package.json. The beta version (1.0.0-beta.6) seems to have a different file structure than what our code expects.
+```javascript
+// Change from
+"chess.js": "^1.0.0-beta.6"
+// To
+"chess.js": "^0.12.0"
+```
+Or alternatively, update the import in server.js to match the correct path for the beta version.
+
+### Issue: Chess Piece Images 404 Errors
+**Status:** Needs Fix
+**Description:** Chess pieces are not displaying on Heroku, resulting in 404 errors for all piece images.
+**Diagnosis:** The logs show multiple 404 errors for chess piece images:
+```
+heroku[router]: at=info method=GET path="/img/chesspieces/wikipedia/wP.png" host=chessville-edb8e53bb6f5.herokuapp.com request_id=d07ff092-9798-4bb7-bd94-58951786bc25 fwd="68.123.11.228" dyno=web.1 connect=0ms service=1ms status=404 bytes=415 protocol=https
+```
+**Solution:** The application is trying to serve these files from the local server, but they don't exist in our deployment. We need to either:
+
+1. Add the chess piece images to our project in the correct directory structure:
+   ```
+   /public/img/chesspieces/wikipedia/
+   ```
+
+2. Or preferably, update the pieceTheme URLs to use an external CDN that reliably hosts these images:
+   ```javascript
+   pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png'
+   ```
+
+### Action Plan for Successful Deployment
+
+1. Fix the chess.js dependency issue by either:
+   - Downgrading to a stable version (0.12.0)
+   - Updating the import path in server.js
+
+2. Fix the chess piece images by:
+   - Adding the image files to our project
+   - Updating pieceTheme URLs to use a reliable CDN
+
+3. Re-deploy to Heroku after these changes
+
+These fixes should resolve the application crashes and missing image issues, allowing for successful deployment on Heroku.
+
+## Chess Piece Image Hosting Solution (2025-02-28)
+
+After the initial Heroku deployment fixes, we encountered persistent issues with chess piece images not displaying properly. While we updated the pieceTheme URLs to use the unpkg CDN, this approach still relies on external services that may have reliability or CORS issues.
+
+### Issue: Chess Piece Images Still Not Displaying
+**Status:** ✅ Completed
+**Description:** Despite updating the pieceTheme URLs to use a reliable CDN, chess piece images are still not displaying consistently on Heroku.
+**Diagnosis:** External CDN dependencies can be unreliable due to:
+1. CORS restrictions
+2. CDN availability
+3. Network latency
+4. Caching issues
+
+**Solution:** Download and serve chess piece images directly from our own server:
+1. Create a dedicated directory for chess piece images: `/public/img/chesspieces/wikipedia/`
+2. Download all required chess piece images (12 total - 6 piece types in 2 colors)
+3. Update pieceTheme URLs to reference our local path:
+   ```javascript
+   pieceTheme: '/img/chesspieces/wikipedia/{piece}.png'
+   ```
+4. Ensure the images are included in the Git repository and Heroku deployment
+
+This approach offers several advantages:
+- Eliminates dependency on external services
+- Reduces latency as images are served from the same origin
+- Prevents CORS issues
+- Ensures consistent availability
+- Chess piece images are small in size (typically <10KB each), so they won't significantly impact deployment size
+
+### Implementation Details
+1. ✅ Created the directory structure: `public/img/chesspieces/wikipedia/`
+2. ✅ Downloaded chess piece images from the official chessboardjs GitHub repository
+3. ✅ Extracted all 12 chess piece images (wP, wR, wN, wB, wQ, wK, bP, bR, bN, bB, bQ, bK)
+4. ✅ Updated pieceTheme references in all JavaScript files:
+   - js/client-core.js
+   - js/modules/chess-manager.js
+   - public/js/app.js
+5. ✅ Documented the changes in HEROKU_FIXES.md
+6. ✅ Committed all changes to the repository
+
+The chess piece images are now served directly from our application, eliminating the dependency on external CDNs and ensuring consistent display of chess pieces across all environments.
+
+## Persistent Chess Piece Image Issues on Heroku (2025-02-28)
+
+Despite implementing local hosting for chess piece images and updating all references to use the local path, we were still experiencing 404 errors for chess piece images when deployed to Heroku:
+
+```
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/wQ.png 404 (Not Found)
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/bP.png 404 (Not Found)
+GET https://chessville-edb8e53bb6f5.herokuapp.com/img/chesspieces/wikipedia/wB.png 404 (Not Found)
+...and other chess piece images
+```
+
+### Issue: Chess Piece Images Not Found on Heroku
+**Status:** ✅ Fixed
+**Description:** Chess piece images that were successfully added locally were not being found on the Heroku deployment.
+**Diagnosis:** The server was not properly configured to serve static files from the 'public' directory. The Express application was only set up to serve static files from the root directory:
+
+```javascript
+// Original configuration
+app.use(express.static(__dirname));
+```
+
+However, our chess piece images were located in the 'public' directory, which wasn't being served correctly.
+
+**Solution:** Added an additional static file middleware to specifically serve files from the 'public' directory:
+
+```javascript
+// Updated configuration
+app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
+```
+
+This ensures that Express will check both the root directory and the 'public' directory when looking for static files, allowing the chess piece images to be served correctly from the '/img/chesspieces/wikipedia/' path.
+
+With this fix, the chess piece images should now be properly served on Heroku, eliminating the 404 errors and ensuring that chess pieces are displayed correctly on the board.
+
+## March 1, 2025 - Additional Bug Fixes
+
+### Issue: End Turn Button Still Present
+- **Status**: Fixed
+- **Description**: The "End Turn" button was still being displayed in the UI during the chess phase despite previous changes.
+- **Diagnosis**: The `updateTurnIndicator` function in the UI-manager.js file was still displaying the end turn button during the chess phase.
+- **Solution**: Modified the updateTurnIndicator function to never display the end turn button, enforcing that players must make a chess move to end their turn:
 ```javascript
 // Update action buttons visibility based on whose turn it is
 const skipFarmingButton = document.getElementById('skip-farming-button');
@@ -236,9 +437,9 @@ if (skipFarmingButton && endTurnButton) {
   }
 }
 ```
-**Date Fixed:** 2025-03-01
+- **Date Fixed**: 2025-03-01
 
-#### Issue: Unable to Make Chess Moves as White
+### Issue: Unable to Make Chess Moves as White
 **Status:** Fixed
 **Description:** Players couldn't make legal chess moves when playing as white. When attempting to drag pieces, the source and target squares were the same, resulting in rejected moves.
 **Diagnosis:** The onDrop function in chess-manager.js was receiving the same source and target values, indicating a problem with the drag-and-drop mechanics. The logs showed messages like "Move rejected: Invalid move from d2 to d2".
