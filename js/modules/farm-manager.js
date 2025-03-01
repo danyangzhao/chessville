@@ -291,12 +291,13 @@ const FarmManager = (function() {
   
   /**
    * Check if the player can perform a farm action
+   * @param {boolean} wasJustHarvested - Optional flag to indicate if the plot was just harvested
    * @returns {boolean} True if the player can perform a farm action
    */
-  function canPerformFarmAction() {
+  function canPerformFarmAction(wasJustHarvested) {
     return GameState.isPlayerTurn() && 
            GameState.getCurrentGamePhase() === 'farming' && 
-           !GameState.hasFarmActionBeenTaken();
+           (wasJustHarvested || !GameState.hasFarmActionBeenTaken());
   }
   
   /**
@@ -332,8 +333,17 @@ const FarmManager = (function() {
     console.log(`Attempting to plant crop in plot ${plotIndex} for ${playerColor}`);
     console.log('Crop data:', cropData);
     
+    // Get the plot
+    const plot = farms[playerColor].plots[plotIndex];
+    
+    // Check if this plot was just auto-harvested this turn and can be immediately planted on
+    const wasJustHarvested = plot && plot.canPlantAfterHarvest === true;
+    
     // First check if it's the player's turn and correct phase
-    if (!canPerformFarmAction()) {
+    // If the plot was just auto-harvested, bypass the farm action taken check
+    if (!(GameState.isPlayerTurn() && 
+          GameState.getCurrentGamePhase() === 'farming' && 
+          (wasJustHarvested || !GameState.hasFarmActionBeenTaken()))) {
       const reason = !GameState.isPlayerTurn() ? "It's not your turn" : 
                      GameState.getCurrentGamePhase() !== 'farming' ? "Not in farming phase" :
                      "Farm action already taken";
@@ -379,14 +389,20 @@ const FarmManager = (function() {
       crop: standardizedCrop,
       plantedTurn: GameState.getCurrentTurn(),
       turnsToHarvest: standardizedCrop.growthTime,
-      player: playerColor // Add player color for auto-harvest
+      player: playerColor, // Add player color for auto-harvest
+      canPlantAfterHarvest: false // Reset this flag
     };
     
     console.log(`Planted ${standardizedCrop.name} in plot ${plotIndex+1} with growth time ${standardizedCrop.growthTime}`);
     console.log(`Plot ${playerColor}-plot-${plotIndex} turnsToHarvest set to: ${standardizedCrop.growthTime}`);
     
     // Register the farm action - this marks that the player has taken an action this turn
-    GameState.registerFarmAction();
+    // Only register if this wasn't planting after auto-harvest
+    if (!wasJustHarvested) {
+      GameState.registerFarmAction();
+    } else {
+      console.log('Planting on just-harvested plot - not counting as a new farm action');
+    }
     
     // Update UI
     displayFarms();
@@ -553,11 +569,23 @@ const FarmManager = (function() {
         if (anyHarvested) {
           showMessage('Some crops were automatically harvested! 🌾', 3000);
           
-          // Reset the wasJustHarvested flag
+          // Reset the wasJustHarvested flag but keep canPlantAfterHarvest flag
           [...farms.white.plots, ...farms.black.plots].forEach(plot => {
             plot.wasJustHarvested = false;
+            // Keep canPlantAfterHarvest flag to allow planting on just-harvested plots
           });
         }
+      }
+      
+      // Clear the canPlantAfterHarvest flag at the beginning of the next phase
+      // so it only applies for the current farming phase
+      if (currentPhase === 'chess') {
+        [...farms.white.plots, ...farms.black.plots].forEach(plot => {
+          if (plot.canPlantAfterHarvest) {
+            console.log(`Clearing canPlantAfterHarvest flag for plot ${plot.id}`);
+            plot.canPlantAfterHarvest = false;
+          }
+        });
       }
       
       console.log('FarmManager.processTurn(): COMPLETED PROCESSING OF ALL FARM PLOTS');
@@ -743,7 +771,14 @@ const FarmManager = (function() {
       plot.turnsToHarvest = null;
       updatePlotDisplay(plot);
       
-      console.log(`AUTO-HARVEST for plot ${plot.id}: ${success ? 'SUCCESSFUL' : 'PARTIALLY FAILED'} - plot cleared`);
+      // Important: Auto-harvesting should NOT register as a farm action taken by the player
+      // This allows the player to still plant in this plot during the same turn
+      // We do NOT call GameState.registerFarmAction() here
+      
+      // Mark this plot as available for immediate planting
+      plot.canPlantAfterHarvest = true;
+      
+      console.log(`AUTO-HARVEST for plot ${plot.id}: ${success ? 'SUCCESSFUL' : 'PARTIALLY FAILED'} - plot cleared and available for planting`);
       return success;
     } catch (error) {
       console.error(`Error in autoHarvestCrop for plot ${plot.id}:`, error);
@@ -768,103 +803,138 @@ const FarmManager = (function() {
    * @param {Object} plot - The plot to update
    */
   function updatePlotDisplay(plot) {
-    if (!plot) {
-      console.error('updatePlotDisplay called with undefined plot');
+    if (!plot || !plot.id) {
+      console.error('Invalid plot object for display update:', plot);
       return;
     }
     
-    // If the plot doesn't have a display element, try to find it
-    if (!plot.display) {
-      plot.display = document.getElementById(plot.id);
-      if (!plot.display) {
-        console.error(`Could not find display element for plot ${plot.id}`);
-        return;
-      }
+    const plotElement = document.getElementById(plot.id);
+    if (!plotElement) {
+      console.log(`Plot element not found: ${plot.id}`);
+      return;
     }
     
-    // Remove all state classes and add the current one
-    plot.display.classList.remove('empty', 'planted', 'ready', 'locked', 'unlockable');
-    plot.display.classList.add(plot.state);
+    // Remove all state classes
+    plotElement.classList.remove('planted', 'ready', 'empty', 'locked', 'unlockable');
     
-    // Clear existing content
-    plot.display.innerHTML = '';
+    // Remove any existing buttons
+    const existingButtons = plotElement.querySelectorAll('button');
+    existingButtons.forEach(button => {
+      button.remove();
+    });
     
-    // Add content based on plot state
-    if (plot.state === PLOT_STATE.LOCKED) {
-      // Locked plot
-      const lockIcon = document.createElement('div');
-      lockIcon.className = 'lock-icon';
-      lockIcon.textContent = '🔒';
-      plot.display.appendChild(lockIcon);
-      
-      const unlockCost = document.createElement('div');
-      unlockCost.className = 'unlock-cost';
-      unlockCost.textContent = `${GameConfig.farmConfig.unlockCost} 🌾`;
-      plot.display.appendChild(unlockCost);
-      
-    } else if (plot.state === PLOT_STATE.PLANTED) {
-      // Planted plot - show crop and turns to harvest
-      let cropData;
-      
-      // Get crop data
-      if (typeof plot.crop === 'string') {
-        cropData = CROPS[plot.crop];
-      } else if (plot.crop && typeof plot.crop === 'object') {
-        cropData = plot.crop;
-        
-        // Try to get additional data from CROPS if type is available
-        if (plot.crop.type && CROPS[plot.crop.type]) {
-          cropData = Object.assign({}, CROPS[plot.crop.type], cropData);
+    // Clear any existing growth indicators
+    const existingGrowthIndicators = plotElement.querySelectorAll('.turns-indicator, .ready-indicator');
+    existingGrowthIndicators.forEach(indicator => {
+      indicator.remove();
+    });
+    
+    // Add class based on plot state
+    plotElement.classList.add(plot.state);
+    
+    // Handle different plot states
+    switch (plot.state) {
+      case PLOT_STATE.EMPTY:
+        // Create "Plant" button for empty plots if it's the player's farm and their turn
+        if (isPlayersFarm(plot.player) && GameState.isPlayerTurn() && GameState.getCurrentGamePhase() === 'farming') {
+          const canPlant = plot.canPlantAfterHarvest || !GameState.hasFarmActionBeenTaken();
+          
+          if (canPlant) {
+            // Create plant button
+            const plantButton = document.createElement('button');
+            plantButton.className = 'plant-button';
+            plantButton.textContent = 'Plant';
+            plantButton.dataset.plotId = plot.id;
+            
+            // If this plot was just harvested, add special styling
+            if (plot.canPlantAfterHarvest) {
+              plantButton.style.backgroundColor = '#45a049'; // Darker green
+              plantButton.style.animation = 'pulse 1s infinite alternate';
+              plantButton.textContent = 'Plant (Harvested)';
+            }
+            
+            // Add plant button to plot
+            plotElement.appendChild(plantButton);
+            
+            // Add event listener
+            plantButton.addEventListener('click', handlePlantButtonClick);
+          }
         }
-      }
-      
-      if (cropData) {
-        // Get growth stage
-        const totalTurns = cropData.turnsTillHarvest || cropData.growthTime || 2;
-        const growthClass = getGrowthClass(plot.turnsToHarvest, totalTurns);
         
-        // Create crop icon
-        const cropIcon = document.createElement('div');
-        cropIcon.className = `crop-icon ${growthClass}`;
-        cropIcon.textContent = cropData.emoji || '🌱';
-        plot.display.appendChild(cropIcon);
+        break;
+      
+      case PLOT_STATE.PLANTED:
+        // Planted plot - show crop and turns to harvest
+        let cropData;
         
-        // Create crop name
-        const cropName = document.createElement('div');
-        cropName.className = 'crop-name';
-        cropName.textContent = cropData.name || 'Crop';
-        plot.display.appendChild(cropName);
+        // Get crop data
+        if (typeof plot.crop === 'string') {
+          cropData = CROPS[plot.crop];
+        } else if (plot.crop && typeof plot.crop === 'object') {
+          cropData = plot.crop;
+          
+          // Try to get additional data from CROPS if type is available
+          if (plot.crop.type && CROPS[plot.crop.type]) {
+            cropData = Object.assign({}, CROPS[plot.crop.type], cropData);
+          }
+        }
         
-        // Create turns to harvest indicator
-        const turnsIndicator = document.createElement('div');
-        turnsIndicator.className = 'turns-indicator';
-        turnsIndicator.textContent = `${plot.turnsToHarvest || '?'} turns`;
-        plot.display.appendChild(turnsIndicator);
-      } else {
-        // Fallback if no crop data
-        plot.display.textContent = 'Unknown crop';
-      }
+        if (cropData) {
+          // Get growth stage
+          const totalTurns = cropData.turnsTillHarvest || cropData.growthTime || 2;
+          const growthClass = getGrowthClass(plot.turnsToHarvest, totalTurns);
+          
+          // Create crop icon
+          const cropIcon = document.createElement('div');
+          cropIcon.className = `crop-icon ${growthClass}`;
+          cropIcon.textContent = cropData.emoji || '🌱';
+          plotElement.appendChild(cropIcon);
+          
+          // Create crop name
+          const cropName = document.createElement('div');
+          cropName.className = 'crop-name';
+          cropName.textContent = cropData.name || 'Crop';
+          plotElement.appendChild(cropName);
+          
+          // Create turns to harvest indicator
+          const turnsIndicator = document.createElement('div');
+          turnsIndicator.className = 'turns-indicator';
+          turnsIndicator.textContent = `${plot.turnsToHarvest || '?'} turns`;
+          plotElement.appendChild(turnsIndicator);
+        } else {
+          // Fallback if no crop data
+          plotElement.textContent = 'Unknown crop';
+        }
+        
+        break;
       
-    } else if (plot.state === PLOT_STATE.READY) {
-      // Ready plot - show it's ready for auto-harvest
-      const readyIcon = document.createElement('div');
-      readyIcon.className = 'ready-icon';
-      readyIcon.textContent = '✓';
-      plot.display.appendChild(readyIcon);
+      case PLOT_STATE.READY:
+        // Ready plot - show it's ready for auto-harvest
+        const readyIcon = document.createElement('div');
+        readyIcon.className = 'ready-icon';
+        readyIcon.textContent = '✓';
+        plotElement.appendChild(readyIcon);
+        
+        const readyText = document.createElement('div');
+        readyText.className = 'ready-text';
+        readyText.textContent = 'Ready for auto-harvest';
+        plotElement.appendChild(readyText);
+        
+        break;
       
-      const readyText = document.createElement('div');
-      readyText.className = 'ready-text';
-      readyText.textContent = 'Ready for auto-harvest';
-      plot.display.appendChild(readyText);
-      
-    } else if (plot.state === PLOT_STATE.EMPTY) {
-      // Empty plot - show plant button
-      const plantButton = document.createElement('button');
-      plantButton.className = 'plant-button';
-      plantButton.textContent = 'Plant';
-      plantButton.dataset.plotId = plot.id;
-      plantButton.addEventListener('click', handlePlantButtonClick);
-      plot.display.appendChild(plantButton);
+      case PLOT_STATE.LOCKED:
+        // Locked plot
+        const lockIcon = document.createElement('div');
+        lockIcon.className = 'lock-icon';
+        lockIcon.textContent = '🔒';
+        plotElement.appendChild(lockIcon);
+        
+        const unlockCost = document.createElement('div');
+        unlockCost.className = 'unlock-cost';
+        unlockCost.textContent = `${GameConfig.farmConfig.unlockCost} 🌾`;
+        plotElement.appendChild(unlockCost);
+        
+        break;
     }
   }
   
@@ -1180,7 +1250,14 @@ const FarmManager = (function() {
    */
   function handlePlantButtonClick(event) {
     const plotId = event.target.dataset.plotId;
-    if (canPerformFarmAction()) {
+    
+    // Get the plot from its ID
+    const plot = getPlotById(plotId);
+    
+    // Check if this plot was just auto-harvested
+    const wasJustHarvested = plot && plot.canPlantAfterHarvest === true;
+    
+    if (canPerformFarmAction(wasJustHarvested)) {
       UIManager.showPlantSelector(plotId);
     } else {
       showMessage('You cannot plant now');

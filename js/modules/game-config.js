@@ -26,38 +26,38 @@ const GameConfig = {
       name: "Wheat",
       emoji: "🌾",
       cost: 5,
-      turnsTillHarvest: 2,
+      turnsTillHarvest: 3,
       yield: 10
     },
     corn: {
       name: "Corn", // This is still named corn but it produces wheat resource
       emoji: "🌽",
       cost: 8,
-      turnsTillHarvest: 3,
-      yield: 20
+      turnsTillHarvest: 4,
+      yield: 18
     },
     carrot: {
       name: "Carrot",
       emoji: "🥕",
       cost: 12,
-      turnsTillHarvest: 4,
-      yield: 33
+      turnsTillHarvest: 5,
+      yield: 30
     },
     potato: {
       name: "Potato",
       emoji: "🥔",
       cost: 15,
-      turnsTillHarvest: 5,
-      yield: 45
+      turnsTillHarvest: 6,
+      yield: 40
     }
   },
   
   // Chess piece move costs (in wheat)
   pieceCosts: {
-    p: 1, // Pawn
-    r: 5, // Rook
-    n: 3, // Knight
-    b: 3, // Bishop
+    p: 2, // Pawn
+    r: 7, // Rook
+    n: 4, // Knight
+    b: 4, // Bishop
     q: 9, // Queen
     k: 0  // King (free to move)
   },
