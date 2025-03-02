@@ -61,6 +61,13 @@ function tryReconnect() {
     // Update UI to show reconnection attempt
     showMessage('Attempting to reconnect to your previous game...', 'info');
     
+    // Set global variables from saved state temporarily
+    // This helps ensure proper initialization when the game starts
+    if (gameState.color) {
+      playerColor = gameState.color;
+      console.log('Setting player color from saved state:', playerColor);
+    }
+    
     // Use saved state to try to reconnect
     if (gameState.roomId && gameState.color && gameState.username) {
       socket.emit('joinGame', {
@@ -86,12 +93,14 @@ function tryReconnect() {
 
 // Handle successful reconnection to a game
 function handleReconnectSuccess(data) {
-  console.log('Successfully reconnected to game:', data);
+  console.log('Successfully reconnected to game with data:', data);
   
   // Set or restore game state
   roomId = data.roomId;
   playerColor = data.color;
   currentTurn = data.currentTurn;
+  
+  console.log('Reconnected as color:', playerColor);
   
   // Restore farm state and wheat count if provided
   if (data.wheatCount !== undefined) {
@@ -121,6 +130,7 @@ function handleReconnectSuccess(data) {
   
   // Update board with current game state
   if (data.gameState && data.gameState.chessEngineState) {
+    console.log('Loading chess state from server:', data.gameState.chessEngineState);
     game.load(data.gameState.chessEngineState);
     board.position(game.fen());
     board.orientation(playerColor);
@@ -192,11 +202,14 @@ function saveGameState() {
     roomId: roomId,
     color: playerColor,
     username: username,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    fen: game ? game.fen() : null, // Save current board state
+    wheatCount: wheatCount,
+    currentTurn: currentTurn
   };
   
   localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify(gameState));
-  console.log('Game state saved for potential reconnection');
+  console.log('Game state saved for potential reconnection:', gameState);
 }
 
 // Clear saved game state
@@ -364,6 +377,9 @@ function handleErrorMessage(data) {
 function setupChessGame() {
   // Initialize the chess.js engine
   game = new Chess();
+  
+  // Log setup information for debugging
+  console.log(`Setting up chess board with color: ${playerColor}`);
   
   // Configure the board position
   const config = {

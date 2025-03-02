@@ -1895,3 +1895,76 @@ These changes ensure that players can refresh the page or reconnect after discon
 2. Improve error handling for edge cases during reconnection
 3. Add a visual indicator showing the reconnection status and progress
 4. Implement a forfeit option for cases where reconnection isn't desired
+
+## Fix for Incorrect Player Color Assignment During Reconnection (2025-03-05)
+
+### Issue: Player Color Switch on Reconnection
+**Status:** Fixed
+**Description:** After implementing the reconnection system, users were able to reconnect to their game rooms, but they were sometimes assigned the wrong color (e.g., a white player reconnecting as black), which caused the chess board to reset to the starting position and lost all previous moves.
+
+**Diagnosis:** The reconnection logic had two main issues:
+1. The client was not properly preserving the player's original color in localStorage
+2. The server was not handling page refreshes correctly, where a player might refresh before the socket disconnection was processed
+
+**Logs Analysis:**
+```
+Game started: {roomId: '111', startingTurn: 'white'}
+Chess engine current position: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+[ChessManager Debug] Player color: black
+isPlayerTurn check: gameActive=true, currentTurn=white, playerColor=black, result=false
+```
+
+These logs showed that a player who was previously white was reconnecting as black, causing the chess board to reset.
+
+**Solution:** Enhanced both client and server reconnection logic:
+
+1. **Improved Client-Side Storage:**
+   - Extended localStorage data to include more game state information:
+   ```javascript
+   const gameState = {
+     roomId: roomId,
+     color: playerColor,
+     username: username,
+     timestamp: Date.now(),
+     fen: game ? game.fen() : null, // Save current board state
+     wheatCount: wheatCount,
+     currentTurn: currentTurn
+   };
+   ```
+   - Pre-assigned the player color from localStorage before attempting reconnection
+   - Added more detailed logging to trace the reconnection flow
+
+2. **Enhanced Server-Side Reconnection:**
+   - Added logic to handle page refreshes where the socket disconnection hasn't been processed yet
+   - Improved the player lookup process to check both disconnected players and active players
+   ```javascript
+   // Check if this color might be an active player who's just refreshing their page
+   if (!gameRooms[gameRoomId].disconnectedPlayers[previousColor]) {
+     log('INFO', `${previousColor} not found in disconnected players, checking active players`);
+     
+     let foundActivePlayer = false;
+     
+     // Check if there's an active player with this color
+     for (const playerId in gameRooms[gameRoomId].players) {
+       const player = gameRooms[gameRoomId].players[playerId];
+       if (player.color === previousColor) {
+         // Found an active player with this color - likely a page refresh
+         foundActivePlayer = true;
+         
+         // Remove the old socket connection
+         delete gameRooms[gameRoomId].players[playerId];
+         // ... handle reconnection ...
+       }
+     }
+   }
+   ```
+   - Added more detailed server-side logging to trace the reconnection process
+
+3. **Improved Error Handling:**
+   - Added better validation for disconnected players
+   - Ensured roomId is valid before attempting to access its properties
+   - Added checks against undefined values that could cause reconnection to fail
+
+These changes ensure that players always reconnect with their original color, preserving the chess board state and ongoing games. Players can now refresh the page or temporarily disconnect without losing their position or having the game reset.
+
+**Date Fixed:** 2025-03-05
