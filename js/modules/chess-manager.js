@@ -42,8 +42,13 @@ const ChessManager = (function() {
       
       chessEngine = new Chess();
       
-      // Set up the board when the UI is ready
-      setTimeout(setupBoard, 100);
+      // UPDATED: Don't immediately call setupBoard, instead wait for player info
+      // We'll check for GameState readiness before setting up the board
+      // Instead of using setTimeout, we'll use a more robust approach
+      document.addEventListener('DOMContentLoaded', function() {
+        // Only set up the board when explicitly requested by GameState or SocketManager
+        console.log('ChessManager initialized and waiting for explicit board setup');
+      });
       
       // Fix touch events for mobile
       setupTouchEventFixes();
@@ -114,9 +119,23 @@ const ChessManager = (function() {
       // Clear any existing board
       boardContainer.innerHTML = '';
       
+      // IMPROVED: More robust game state checking
       // Check for saved game state in localStorage if no savedFEN is provided
       if (!savedFEN) {
         try {
+          // First check if we have a valid room ID from GameState
+          const currentRoomId = GameState.getRoomId();
+          
+          if (!currentRoomId) {
+            debugLog('No current room ID available yet, deferring board setup');
+            // If we're still in the login screen, don't set up a real board yet
+            const isLoginVisible = document.getElementById('login-screen')?.classList.contains('hidden') === false;
+            if (isLoginVisible) {
+              debugLog('Still on login screen, skipping full board setup');
+              return;
+            }
+          }
+          
           const savedState = localStorage.getItem('chessFarm_gameState');
           if (savedState) {
             const gameState = JSON.parse(savedState);
@@ -125,11 +144,18 @@ const ChessManager = (function() {
             const now = Date.now();
             const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
             
+            // ENHANCED: Better validation of saved state
             if (gameState.fen && gameState.timestamp && 
                 (now - gameState.timestamp <= reconnectTimeout) &&
-                gameState.roomId === GameState.getRoomId()) {
+                (currentRoomId === null || gameState.roomId === currentRoomId)) {
               debugLog('Found valid saved game state in localStorage, using saved FEN:', gameState.fen);
               savedFEN = gameState.fen;
+            } else {
+              debugLog('Found saved game state but it is invalid or for a different room', {
+                currentRoomId,
+                savedRoomId: gameState.roomId,
+                timeDifference: now - gameState.timestamp
+              });
             }
           }
         } catch (e) {

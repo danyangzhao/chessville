@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
+    // UPDATED: Phased initialization sequence
+    // Phase 1: Initialize UI and GameState first
+    console.log('Phase 1: Initializing UI and GameState');
+    
     // Initialize the UI Manager
     if (!UIManager.initialize()) {
       console.error('Failed to initialize UI Manager');
@@ -27,6 +31,28 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Failed to initialize Game State');
       return;
     }
+    
+    // Phase 2: Check for saved game state
+    console.log('Phase 2: Checking for saved game state');
+    try {
+      const savedState = localStorage.getItem('chessFarm_gameState');
+      if (savedState) {
+        const gameState = JSON.parse(savedState);
+        console.log('Found saved game state:', gameState);
+        
+        // If joining the same room, pre-initialize game state with saved info
+        if (gameState.roomId && gameState.color) {
+          console.log('Pre-initializing game state with saved data');
+          // This will help ensure player color is set before chess board initialization
+          GameState.setupGame(gameState.roomId, gameState.color);
+        }
+      }
+    } catch (e) {
+      console.error('Error checking for saved game state:', e);
+    }
+    
+    // Phase 3: Initialize other managers
+    console.log('Phase 3: Initializing remaining managers');
     
     // Initialize the Farm Manager
     if (!FarmManager.initialize()) {
@@ -46,6 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
+    // Phase 4: Final setup
+    console.log('Phase 4: Final initialization steps');
+    
     // Set up debug panel functionality
     setupDebugPanel();
     
@@ -54,8 +83,43 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show the login screen
     UIManager.showScreen('login-screen');
     
-    // Display the chess piece movement costs in the UI
-    ChessManager.showMoveCosts();
+    // Remove this line - we'll let the actual game start set up the board properly
+    // ChessManager.showMoveCosts();
+    
+    // Phase 5: Check for auto-reconnect
+    console.log('Phase 5: Checking for auto-reconnect');
+    try {
+      const savedState = localStorage.getItem('chessFarm_gameState');
+      if (savedState) {
+        const gameState = JSON.parse(savedState);
+        const now = Date.now();
+        const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
+        
+        // Check if saved state is valid for auto-reconnect
+        if (gameState.roomId && 
+            gameState.timestamp && 
+            (now - gameState.timestamp <= reconnectTimeout)) {
+          
+          console.log('Valid recent game state found, attempting auto-reconnect');
+          
+          // Show a message about reconnecting
+          showMessage('Reconnecting to previous game...', 3000);
+          
+          // Attempt to reconnect with saved state
+          setTimeout(() => {
+            SocketManager.reconnect({
+              username: gameState.username || 'Player',
+              roomId: gameState.roomId,
+              previousColor: gameState.color,
+              savedFEN: gameState.fen,
+              savedFarmState: gameState.farmState
+            });
+          }, 1000);
+        }
+      }
+    } catch (e) {
+      console.error('Error during auto-reconnect check:', e);
+    }
     
   } catch (error) {
     console.error('Critical initialization error:', error);

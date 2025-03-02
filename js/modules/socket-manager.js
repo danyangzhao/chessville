@@ -187,6 +187,8 @@ const SocketManager = (function() {
       // Get the FEN position to restore - prioritize server data but fall back to localStorage
       let fenPosition = null;
       
+      // ENHANCED: Improved FEN position recovery with better fallback logic and error handling
+      
       // First try to use server-provided game state
       if (data.gameState && data.gameState.chessEngineState) {
         console.log('🔴 Using server-provided FEN position for reconnection');
@@ -213,16 +215,27 @@ const SocketManager = (function() {
         }
       }
       
-      // Initialize chess board with the appropriate FEN position
-      if (typeof ChessManager !== 'undefined') {
-        if (fenPosition) {
-          console.log('🔴 Setting up chess board with saved position:', fenPosition);
-          ChessManager.setupBoard(fenPosition);
-        } else {
-          console.log('🔴 No saved position found, setting up new chess board');
-          ChessManager.setupBoard();
+      // CRITICAL: Wait until UI is completely updated before initializing chess board
+      // This ensures all prerequisites are in place before the board is set up
+      setTimeout(() => {
+        // Initialize chess board with the appropriate FEN position
+        if (typeof ChessManager !== 'undefined') {
+          if (fenPosition) {
+            console.log('🔴 Setting up chess board with saved position:', fenPosition);
+            // Use a short delay to ensure the game container is fully rendered
+            ChessManager.setupBoard(fenPosition);
+          } else {
+            console.log('🔴 No saved position found, setting up new chess board');
+            ChessManager.setupBoard();
+          }
+          
+          // Make sure the board reflects the current game state
+          setTimeout(() => {
+            ChessManager.refreshBoard();
+            console.log('🔴 Chess board refreshed after reconnection');
+          }, 300);
         }
-      }
+      }, 200);
     });
     
     socket.on('roomFull', (data) => {

@@ -1377,3 +1377,61 @@ The fix was verified by testing the following scenarios:
 In all valid reconnection cases, the chess board state, turn information, and farm state were properly restored.
 
 **Date Fixed:** 2025-03-02
+
+## Reconnection State Restoration Issue (March 10, 2025)
+
+### Issue: Chess Board Resets Before Game State Recovery
+**Status:** In Progress
+**Description:** We've identified a timing issue in the initialization sequence that prevents proper game state restoration during reconnection.
+
+**Analysis:**
+The debugging logs reveal a critical initialization timing problem:
+```
+chess-manager.js:20 [ChessManager Debug] Setting up chess board
+chess-manager.js:20 [ChessManager Debug] No saved FEN found, resetting chess engine to starting position
+game-state.js:463 🔴 Player color is null! This should never happen.
+...
+game-state.js:471 🔴 Recovered player color from localStorage: white
+```
+
+1. **Root Cause**: The chess board is being initialized and reset to the starting position BEFORE the player color and saved game state are recovered from localStorage.
+
+2. **Module Initialization Sequence**: Our current module initialization sequence doesn't properly account for dependencies between modules:
+   - GameState, ChessManager, and other modules all initialize in parallel
+   - ChessManager sets up the board immediately during initialization
+   - The game state recovery happens after the board has already been reset
+
+3. **Previous Fixes Incomplete**: While we've added the necessary functions to restore game state, the initialization timing prevents them from being effective.
+
+**Next Steps:**
+1. Modify the initialization sequence to ensure GameState is fully loaded and recovered from localStorage before ChessManager initializes the board
+2. Implement a "deferred initialization" approach for ChessManager where board setup waits for game state recovery
+3. Add explicit dependency checking between modules to ensure proper initialization order
+4. Consider a more robust event-based system for module initialization to handle dependencies cleanly
+
+### Solution Implementation (March 10, 2025)
+We've implemented several changes to fix the reconnection issue:
+
+1. **Modified Initialization Sequence**: 
+   - Restructured client-core.js to use a phased initialization approach
+   - Added explicit GameState recovery from localStorage before other modules are initialized
+   - Pre-initialize GameState with saved data before ChessManager is set up
+
+2. **Deferred Chess Board Setup**:
+   - Removed automatic chess board setup during initialization
+   - Modified ChessManager to only set up the board when explicitly requested
+   - Added more robust checking for valid game state before board initialization
+   - Added delays to ensure UI is fully rendered before board setup
+
+3. **Enhanced Reconnection Logic**:
+   - Improved FEN position recovery with better prioritization and fallback logic
+   - Added explicit error handling for all reconnection steps
+   - Added validation for saved game state before attempting to use it
+   - Added auto-reconnect functionality when valid saved state exists
+
+4. **Improved Debugging**:
+   - Added comprehensive logging for the reconnection process
+   - Added validation and error reporting for saved game state
+   - Added detailed logging for board initialization and game state recovery
+
+The key insight was understanding that module initialization order matters, and that we need to ensure GameState recovery happens before chess board initialization. This prevents the board from being reset to the starting position when there's a valid saved game state to restore.
