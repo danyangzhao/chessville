@@ -453,6 +453,128 @@ const GameState = (function() {
     SocketManager.sendGameOver(winnerColor, victoryType);
   }
   
+  /**
+   * Get the player's color
+   * @returns {string} The player's color ('white' or 'black')
+   */
+  function getPlayerColor() {
+    // Add safety check for null playerColor
+    if (playerColor === null) {
+      console.error('🔴 Player color is null! This should never happen.');
+      
+      // Try to recover color from localStorage if available
+      try {
+        const storedData = localStorage.getItem('chessFarm_gameState');
+        if (storedData) {
+          const gameState = JSON.parse(storedData);
+          if (gameState && gameState.color) {
+            console.log('🔴 Recovered player color from localStorage:', gameState.color);
+            playerColor = gameState.color;
+            return playerColor;
+          }
+        }
+      } catch (e) {
+        console.error('Error recovering color from localStorage:', e);
+      }
+      
+      // Return default if can't recover
+      console.warn('🔴 Defaulting to white for player color');
+      return 'white';
+    }
+    
+    return playerColor;
+  }
+  
+  /**
+   * Get the current turn
+   * @returns {string} The current turn ('white' or 'black')
+   */
+  function getCurrentTurn() {
+    return currentTurn;
+  }
+  
+  /**
+   * Set the current turn
+   * @param {string} turn - The new turn value ('white' or 'black')
+   */
+  function setCurrentTurn(turn) {
+    // Validate the turn
+    if (turn !== 'white' && turn !== 'black') {
+      console.error(`Invalid turn value: ${turn}`);
+      return;
+    }
+    
+    console.log(`Setting current turn to: ${turn}`);
+    currentTurn = turn;
+    
+    // Update the UI if UIManager is available
+    if (typeof UIManager !== 'undefined' && typeof UIManager.updateTurnIndicator === 'function') {
+      UIManager.updateTurnIndicator();
+    }
+  }
+  
+  /**
+   * Save game state to localStorage for potential reconnection
+   */
+  function saveGameState() {
+    // Don't save if we don't have a room ID and player color
+    if (!roomId || !playerColor) {
+      console.warn('Cannot save game state without room ID and player color');
+      return;
+    }
+    
+    try {
+      // Get FEN from ChessManager if available
+      let fen = '';
+      if (typeof ChessManager !== 'undefined' && typeof ChessManager.getFEN === 'function') {
+        fen = ChessManager.getFEN();
+      }
+      
+      // Get farm state from FarmManager if available
+      let farmState = null;
+      if (typeof FarmManager !== 'undefined' && typeof FarmManager.getFarmState === 'function') {
+        farmState = FarmManager.getFarmState();
+      }
+      
+      // Get username from UIManager if available
+      let username = '';
+      if (typeof UIManager !== 'undefined' && typeof UIManager.getUsername === 'function') {
+        username = UIManager.getUsername();
+      }
+      
+      // Create game state object
+      const gameState = {
+        roomId: roomId,
+        color: playerColor,
+        username: username,
+        timestamp: Date.now(),
+        fen: fen,
+        wheatCount: resources[playerColor].wheat,
+        currentTurn: currentTurn,
+        farmState: farmState
+      };
+      
+      // Save to localStorage
+      localStorage.setItem('chessFarm_gameState', JSON.stringify(gameState));
+      console.log('Game state saved to localStorage:', gameState);
+      
+    } catch (error) {
+      console.error('Error saving game state:', error);
+    }
+  }
+  
+  /**
+   * Clear saved game state from localStorage
+   */
+  function clearGameState() {
+    try {
+      localStorage.removeItem('chessFarm_gameState');
+      console.log('Game state cleared from localStorage');
+    } catch (error) {
+      console.error('Error clearing game state:', error);
+    }
+  }
+  
   // Public API
   return {
     initialize,
@@ -503,8 +625,8 @@ const GameState = (function() {
     
     // Getters
     getRoomId: () => roomId,
-    getPlayerColor: () => playerColor,
-    getCurrentTurn: () => currentTurn,
+    getPlayerColor: getPlayerColor,
+    getCurrentTurn: getCurrentTurn,
     isGameActive: () => gameActive,
     isOpponentConnected: () => opponentConnected,
     setOpponentConnected: (status) => {
@@ -514,19 +636,16 @@ const GameState = (function() {
     getWinner: () => winner,
     
     // Additional setters
-    setCurrentTurn: (turn) => {
-      if (turn === 'white' || turn === 'black') {
-        currentTurn = turn;
-        console.log(`Current turn set to: ${turn}`);
-      } else {
-        console.error(`Invalid turn value: ${turn}`);
-      }
-    },
+    setCurrentTurn: setCurrentTurn,
     
     // Reset farm action taken flag
     resetFarmActionTaken: () => {
       farmActionTaken = false;
       console.log('Farm action flag reset');
-    }
+    },
+    
+    // New functions
+    saveGameState,
+    clearGameState
   };
 })(); 

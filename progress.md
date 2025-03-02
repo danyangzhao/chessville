@@ -2061,3 +2061,257 @@ These logs showed the player was initially white, but after reconnection was inc
 These changes ensure that players always reconnect with their original color by taking a more aggressive approach to color preservation and validation throughout the reconnection process. The system now correctly handles all reconnection scenarios, including page refreshes, network disconnections, and cases where player data might be temporarily missing.
 
 **Date Fixed:** 2025-03-06
+
+## Null Player Color in Modular Architecture (2025-03-06)
+
+### Issue: Player Color Null in Chess Manager Despite Correct Server Assignment
+**Status:** In Progress
+**Description:** Despite previous fixes to the reconnection system and color persistence, players are still experiencing issues where the Chess Manager component shows `null` for player color during initialization, even though the server correctly assigned a color and other components acknowledge it.
+
+**Diagnosis:** Through detailed logging analysis, we've discovered a component communication issue in the modular architecture:
+
+1. The server correctly assigns player color (e.g., 'black')
+2. The Socket Manager and Game State modules correctly receive this assignment
+3. However, the Chess Manager module shows `null` for player color during board initialization
+
+**Debug Logs Analysis:**
+```
+socket-manager.js:65 Player assigned to room: {roomId: '222', color: 'black', isFirstPlayer: false, username: 'Player'}
+game-state.js:90 Game setup complete. Room: 222, Player color: black
+chess-manager.js:20 [ChessManager Debug] Setting up chess board
+chess-manager.js:20 [ChessManager Debug] Player color: null  <-- Critical issue here!
+chess-manager.js:20 [ChessManager Debug] Board orientation: black
+```
+
+This indicates a synchronization problem between modules, where the Chess Manager isn't receiving or accessing the player color that was successfully assigned by the server and acknowledged by other components.
+
+**Root Cause Analysis:**
+The application has been refactored into a modular architecture with separate components:
+- `chess-manager.js`: Handles chess board and game logic
+- `socket-manager.js`: Manages socket.io communication
+- `ui-manager.js`: Controls UI updates and screen changes
+- `game-state.js`: Maintains overall game state
+- `farm-manager.js`: Manages farming mechanics
+
+Our previous fixes focused on the consolidated `app.js` and `server.js` files, but didn't address how player color is communicated between these modular components.
+
+**Proposed Solution:**
+
+1. **Component State Synchronization:**
+   - Implement a centralized state manager to ensure consistent player color across all components
+   - Add explicit state update events when player color changes
+   - Ensure Chess Manager initializes only after player color is definitively set
+
+2. **Chess Manager Enhancements:**
+   - Add defensive coding to prevent chess board initialization with null color
+   - Implement retry mechanism if player color is null during initialization
+   - Add fallback to retrieve player color from other components if null
+
+3. **Color Assignment Order:**
+   - Review initialization sequence to ensure player color is set before Chess Manager setup
+   - Add pre-initialization checks to validate player color exists
+
+4. **Improved Debugging:**
+   - Add comprehensive tracing of player color value as it passes between components
+   - Log state transitions for each component with timestamps to identify race conditions
+
+**Implementation Plan:**
+1. Identify how the Chess Manager retrieves player color
+2. Add checks to prevent null values from being used
+3. Implement proper communication between Game State and Chess Manager modules
+4. Add retry logic if chess board attempts to initialize with null color
+
+This issue highlights the challenges of maintaining consistent state across modular components, especially during reconnection scenarios. The fix will require addressing not just the symptoms but ensuring proper state synchronization across the entire application architecture.
+
+**In Progress**
+
+## Modular Architecture Reconnection Fix (2025-03-07)
+
+### Issue: Null Player Color in Chess Manager During Reconnection
+**Status:** Fixed
+**Description:** After refactoring the codebase into a modular architecture, players experienced issues where their color would appear as `null` during board initialization despite being correctly assigned by the server. This happened because the reconnection functionality was not properly implemented in the modular version of the application.
+
+**Diagnosis:** Through console logs, we identified that while the server correctly assigned colors to reconnecting players, the Chess Manager component was showing `null` for the player color during initialization:
+
+```
+socket-manager.js:65 Player assigned to room: {roomId: '222', color: 'black', isFirstPlayer: false, username: 'Player'}
+game-state.js:90 Game setup complete. Room: 222, Player color: black
+chess-manager.js:20 [ChessManager Debug] Setting up chess board
+chess-manager.js:20 [ChessManager Debug] Player color: null  <-- Critical issue here!
+chess-manager.js:20 [ChessManager Debug] Board orientation: black
+```
+
+Root cause analysis revealed three key issues:
+1. The modular architecture lacked proper reconnection handling
+2. The `reconnectSuccess` event from the server wasn't being processed
+3. There was no synchronization of player color between modules
+
+**Solution Implemented:**
+
+1. **Socket Manager Enhancements:**
+   - Added comprehensive handling for the `reconnectSuccess` event
+   - Ensured proper color assignment during reconnection
+   - Improved logging of reconnection process
+   - Added a `reconnect` function to handle reconnection attempts
+   
+   ```javascript
+   socket.on('reconnectSuccess', (data) => {
+     console.log('🔴 Reconnection successful:', data);
+     roomId = data.roomId;
+     
+     // CRITICAL: Update game state with the reconnected player's color
+     GameState.setupGame(data.roomId, data.color);
+     
+     console.log('🔴 Player color set to:', data.color);
+     
+     // Start the game immediately since we're reconnecting
+     GameState.startGame();
+     
+     // Initialize chess board with saved state if available
+     if (data.gameState && data.gameState.chessEngineState) {
+       ChessManager.setupBoard(data.gameState.chessEngineState);
+     }
+   });
+   ```
+
+2. **Game State Improvements:**
+   - Added defensive coding for null player color
+   - Implemented color recovery from localStorage if needed
+   - Added state saving and restoration functions
+   
+   ```javascript
+   function getPlayerColor() {
+     // Add safety check for null playerColor
+     if (playerColor === null) {
+       console.error('🔴 Player color is null! This should never happen.');
+       
+       // Try to recover color from localStorage if available
+       try {
+         const storedData = localStorage.getItem('chessFarm_gameState');
+         if (storedData) {
+           const gameState = JSON.parse(storedData);
+           if (gameState && gameState.color) {
+             console.log('🔴 Recovered player color from localStorage:', gameState.color);
+             playerColor = gameState.color;
+             return playerColor;
+           }
+         }
+       } catch (e) {
+         console.error('Error recovering color from localStorage:', e);
+       }
+       
+       // Return default if can't recover
+       console.warn('🔴 Defaulting to white for player color');
+       return 'white';
+     }
+     
+     return playerColor;
+   }
+   ```
+
+3. **Application Initialization:**
+   - Added specific initialization order to ensure modules load correctly
+   - Implemented reconnection check at startup
+   - Added pre-initialization of player color from localStorage
+   
+   ```javascript
+   function initializeApp() {
+     console.log('Initializing Chess Farm Game...');
+     
+     // Initialize the modules in the correct order
+     UIManager.initialize();
+     GameState.initialize();
+     SocketManager.initialize();
+     ChessManager.initialize();
+     FarmManager.initialize();
+     
+     // Critical: Try to reconnect if we have saved game state
+     // This must happen after all modules are initialized
+     setTimeout(tryReconnect, 500);
+   }
+   ```
+
+4. **Modular Reconnection System:**
+   - Implemented `tryReconnect` function to check for saved games
+   - Added state saving at critical points (player assignment, game start)
+   - Improved communication between modules during reconnection
+   
+   ```javascript
+   function tryReconnect() {
+     console.log('🔴 Checking for saved game state to reconnect...');
+     
+     // Constants for localStorage
+     const GAME_STATE_KEY = 'chessFarm_gameState';
+     const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+     
+     try {
+       // Check if we have saved game state
+       const savedStateJSON = localStorage.getItem(GAME_STATE_KEY);
+       if (!savedStateJSON) {
+         console.log('🔴 No saved game state found');
+         return;
+       }
+       
+       // Parse the saved state
+       const savedState = JSON.parse(savedStateJSON);
+       console.log('🔴 Found saved game state:', savedState);
+       
+       // Verify we have the minimum required data
+       if (!savedState.roomId || !savedState.username) {
+         console.log('🔴 Saved game state missing required fields');
+         return;
+       }
+       
+       // Check if the saved state is too old
+       const now = Date.now();
+       if (savedState.timestamp && (now - savedState.timestamp > RECONNECT_TIMEOUT)) {
+         console.log('🔴 Saved game state is too old (>5 minutes), not reconnecting');
+         localStorage.removeItem(GAME_STATE_KEY);
+         return;
+       }
+       
+       // CRITICAL: Set up game state with saved player color to prevent null values during reconnection
+       if (typeof GameState !== 'undefined' && savedState.color) {
+         console.log('🔴 Pre-initializing game state with saved color:', savedState.color);
+         GameState.setupGame(savedState.roomId, savedState.color);
+       }
+       
+       // Attempt to reconnect
+       if (typeof SocketManager !== 'undefined') {
+         console.log('🔴 Emitting reconnect attempt with saved state');
+         SocketManager.reconnect({
+           username: savedState.username,
+           roomId: savedState.roomId,
+           previousColor: savedState.color // Send the saved color
+         });
+       }
+     } catch (error) {
+       console.error('🔴 Error during reconnection attempt:', error);
+       // Clear potentially corrupted data
+       localStorage.removeItem(GAME_STATE_KEY);
+     }
+   }
+   ```
+
+5. **Comprehensive Game State Saving:**
+   - Added game state saving after critical events:
+     - Player assignment
+     - Game start
+     - Player moves
+     - Opponent moves
+   - Ensured all relevant game state is captured:
+     - Room ID and player color
+     - Chess board position (FEN)
+     - Farm state
+     - Current turn
+     - Resources (wheat count)
+
+**Results:**
+- Players can now refresh the page and reconnect to games without losing their color assignment
+- Chess board properly initializes with the correct player color
+- State is correctly preserved and restored across different modules
+- The defensive coding prevents null player color from causing issues
+
+This fix demonstrates the importance of ensuring consistent state across different modules in a modular application architecture, particularly for complex features like reconnection.
+
+**Date Fixed:** 2025-03-07

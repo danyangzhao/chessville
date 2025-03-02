@@ -43,6 +43,49 @@ const SocketManager = (function() {
   }
   
   /**
+   * Attempt to reconnect to a previous game session
+   * @param {object} reconnectData - Data needed for reconnection
+   * @param {string} reconnectData.username - Player's username
+   * @param {string} reconnectData.roomId - Room ID to reconnect to
+   * @param {string} reconnectData.previousColor - The player's previous color in the game
+   */
+  function reconnect(reconnectData) {
+    if (!socket) {
+      console.error('Socket not initialized');
+      return false;
+    }
+    
+    if (!reconnectData.username || !reconnectData.roomId) {
+      console.error('Missing required data for reconnection');
+      return false;
+    }
+    
+    console.log('🔴 Attempting to reconnect with data:', reconnectData);
+    
+    // Add reconnection flag to the data
+    const joinData = {
+      ...reconnectData,
+      isReconnecting: true
+    };
+    
+    // Emit joinGame event with reconnection data
+    socket.emit('joinGame', joinData);
+    
+    // Show waiting screen during reconnection attempt
+    if (typeof UIManager !== 'undefined') {
+      UIManager.showScreen('waiting-screen');
+      
+      // Update room code display
+      const roomCodeDisplay = document.getElementById('room-code-display');
+      if (roomCodeDisplay) {
+        roomCodeDisplay.textContent = reconnectData.roomId;
+      }
+    }
+    
+    return true;
+  }
+  
+  /**
    * Set up socket event listeners
    */
   function setupSocketListeners() {
@@ -69,6 +112,12 @@ const SocketManager = (function() {
       GameState.setupGame(data.roomId, data.color);
       UIManager.setupGameUI(data.roomId, data.color);
       
+      // Save the game state for potential reconnection
+      if (typeof GameState.saveGameState === 'function') {
+        console.log('🔴 Saving game state after player assigned');
+        GameState.saveGameState();
+      }
+      
       // Keep showing the waiting screen
       UIManager.showScreen('waiting-screen');
       
@@ -85,6 +134,60 @@ const SocketManager = (function() {
       if (!data.isFirstPlayer) {
         UIManager.updateGameStatus('Joining existing game...');
       }
+    });
+    
+    socket.on('reconnectSuccess', (data) => {
+      console.log('🔴 Reconnection successful:', data);
+      roomId = data.roomId;
+      
+      // CRITICAL: Update game state with the reconnected player's color and game state
+      // This ensures the color is properly set before other components try to use it
+      GameState.setupGame(data.roomId, data.color);
+      
+      // Log color assignment for debugging
+      console.log('🔴 Player color set to:', data.color);
+      
+      // Start the game immediately since we're reconnecting
+      GameState.startGame();
+      
+      // Update resources if provided
+      if (data.wheatCount !== undefined) {
+        GameState.updateWheat(data.color, data.wheatCount);
+      }
+      
+      // Update farm state if provided
+      if (data.farmState) {
+        if (typeof FarmManager !== 'undefined' && typeof FarmManager.restoreFarmState === 'function') {
+          FarmManager.restoreFarmState(data.farmState);
+        }
+      }
+      
+      // Set current turn
+      if (data.currentTurn) {
+        GameState.setCurrentTurn(data.currentTurn);
+      }
+      
+      // Update UI
+      UIManager.showScreen('game-screen');
+      UIManager.updateGameStatus('Reconnected to game');
+      UIManager.updateTurnIndicator();
+      
+      // Initialize chess board with saved state if available
+      if (data.gameState && data.gameState.chessEngineState) {
+        if (typeof ChessManager !== 'undefined') {
+          console.log('🔴 Setting up chess board with saved position');
+          ChessManager.setupBoard(data.gameState.chessEngineState);
+        }
+      } else {
+        // Set up a new chess board if no state is provided
+        if (typeof ChessManager !== 'undefined') {
+          console.log('🔴 Setting up new chess board');
+          ChessManager.setupBoard();
+        }
+      }
+      
+      // Show success message
+      UIManager.showMessage('Successfully reconnected to your game!', 'success');
     });
     
     socket.on('roomFull', (data) => {
@@ -146,20 +249,41 @@ const SocketManager = (function() {
     
     socket.on('gameStart', (data) => {
       console.log('Game started:', data);
-      GameState.startGame();
-      ChessManager.setupBoard();
       
-      // Update UI based on whether it's the player's turn
-      if (GameState.isPlayerTurn()) {
-        UIManager.updateGamePhaseIndicator('farming');
-        showMessage('Your turn! Start with the farming phase');
-      } else {
-        UIManager.updateTurnIndicator();
-        showMessage('Opponent\'s turn');
+      // Start the game in GameState
+      GameState.startGame();
+      
+      // Set initial turn
+      if (data.startingTurn) {
+        GameState.setCurrentTurn(data.startingTurn);
+      }
+      
+      // Save the game state for potential reconnection
+      if (typeof GameState.saveGameState === 'function') {
+        console.log('🔴 Saving game state after game start');
+        GameState.saveGameState();
       }
       
       // Show the game screen
       UIManager.showScreen('game-screen');
+      
+      // Setup the chess board
+      if (typeof ChessManager !== 'undefined' && typeof ChessManager.setupBoard === 'function') {
+        ChessManager.setupBoard();
+      }
+      
+      // Update turn indicator
+      UIManager.updateTurnIndicator();
+      
+      // Setup game UI elements
+      UIManager.setupGameUI();
+      
+      // Show appropriate message based on whose turn it is
+      if (GameState.isPlayerTurn()) {
+        UIManager.showMessage('Game started! Your turn!');
+      } else {
+        UIManager.showMessage('Game started! Waiting for opponent to move');
+      }
     });
     
     socket.on('game-started', (data) => {
@@ -371,7 +495,7 @@ const SocketManager = (function() {
   
   /**
    * Send a chess move to the server
-   * @param {Object} move - The move object
+   * @param {object} move - The move data
    */
   function sendChessMove(move) {
     if (!socket || !roomId) {
@@ -389,6 +513,12 @@ const SocketManager = (function() {
       move: move,
       fen: currentFEN
     });
+    
+    // Save game state after sending a move
+    if (typeof GameState.saveGameState === 'function') {
+      console.log('🔴 Saving game state after player\'s move');
+      GameState.saveGameState();
+    }
     
     // End turn after making a chess move is handled by auto end-turn in ChessManager
   }
@@ -591,8 +721,8 @@ const SocketManager = (function() {
   }
   
   /**
-   * Processes a chess move from the opponent
-   * @param {Object} data - The chess move data
+   * Process a chess move received from the server
+   * @param {object} data - The move data
    */
   function processChessMove(data) {
     console.log('Received chess move from opponent:', data);
@@ -619,6 +749,12 @@ const SocketManager = (function() {
       
       // Update UI
       UIManager.updateTurnIndicator();
+      
+      // Save game state after processing opponent's move
+      if (typeof GameState.saveGameState === 'function') {
+        console.log('🔴 Saving game state after opponent\'s move');
+        GameState.saveGameState();
+      }
     } catch (error) {
       console.error('Error processing opponent chess move:', error);
     }
@@ -672,5 +808,6 @@ const SocketManager = (function() {
     getSocket: getSocket,
     getRoomId: getRoomId,
     getPlayerColor: getPlayerColor,
+    reconnect: reconnect,
   };
 })(); 
