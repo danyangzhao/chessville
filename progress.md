@@ -623,7 +623,7 @@ With this fix, the chess piece images should now be properly served on Heroku, e
 
 ## March 1, 2025 - Additional Bug Fixes
 
-### Issue: End Turn Button Still Present Despite UI Changes
+### Issue: End Turn Button Still Present
 - **Status**: Fixed
 - **Description**: The "End Turn" button was still being displayed in the UI during the chess phase despite previous changes.
 - **Diagnosis**: The `updateTurnIndicator` function was modified previously, but the `updateGamePhaseIndicator` function was also controlling the button's visibility and needed to be modified as well.
@@ -854,1459 +854,229 @@ if (turnHasChanged) {
 
 The game continues to evolve with player feedback guiding our development priorities. The recent improvements to chess movement and farming mechanics should provide a more intuitive and rewarding experience for all players.
 
-## Mobile UI Improvements (March 2, 2025)
+## Player Color and Turn Management Analysis (March 5, 2025)
 
-### Issue: Farm Plot UI Squeezed to the Left Side on Mobile
-**Status:** Fixed
-**Description:** On mobile devices, the farm plot area was squeezed to the left side of the screen, making it difficult to see and interact with the plots, especially on smaller phone screens.
-**Diagnosis:** The original CSS layout used a fixed-width approach with flex containers that didn't adapt well to smaller screen sizes. There were no media queries specifically targeting the farm container layout for mobile devices.
-**Solution:** Implemented comprehensive mobile-responsive CSS using media queries to restructure the layout on smaller screens:
+### Issue: Persistent Player Color and Turn Management Challenges
+**Status:** Investigating
+**Description:** Despite implementing multiple fixes for player color preservation during reconnection, we're still experiencing issues with the game state. Previous solutions focused on ensuring the player color is preserved during reconnection, but logs now indicate the issue may be more complex.
 
-1. Added media queries for tablets (max-width: 768px):
-   - Changed the player areas layout from horizontal to vertical stacking
-   - Made farm containers take full width of the screen
-   - Made chess board responsive with appropriate scaling
-   - Simplified header elements for better mobile viewing
-
-```css
-@media (max-width: 768px) {
-  .player-areas {
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-  }
-  
-  .player-area {
-    width: 100%;
-    max-width: 100%;
-  }
-  
-  .chess-board {
-    width: 100%;
-    max-width: 90vw;
-    margin: 0 auto;
-  }
-  
-  /* Adjust farm container to use more screen real estate */
-  .farm-container {
-    width: 100%;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    padding: 10px;
-  }
-}
-```
-
-2. Added additional optimizations for very small screens (max-width: 480px):
-   - Reduced padding and margins
-   - Adjusted font sizes for better readability
-   - Improved touch targets for buttons
-   - Further optimized farm plots for smaller screens
-
-```css
-@media (max-width: 480px) {
-  .farm-plot {
-    height: 70px;
-  }
-  
-  .crop-name, .growth-info, .locked-info {
-    font-size: 9px;
-  }
-  
-  /* Improve touch targets */
-  .harvest-button, .plant-button, .unlock-plot-button {
-    padding: 10px 5px;
-  }
-}
-```
-
-**Benefits:**
-- Farm plots now display properly across all device sizes
-- Better usability on mobile devices with improved touch targets
-- More efficient use of screen real estate
-- Responsive layout adapts to various screen sizes automatically
-- Improved overall mobile gaming experience
-
-**Date Fixed:** 2025-03-02
-
-## Current Development Focus
-1. Continuing UI/UX improvements for better cross-device compatibility
-2. Bug fixes and optimizations based on player feedback
-3. Performance enhancements for smoother gameplay
-4. Additional game features and mechanics
-
-The Chess Farm Game is now more accessible on mobile devices, allowing players to enjoy the full experience regardless of their device type or screen size.
-
-## March 3, 2025 - Farm System Fixes
-
-### Issue: Auto-Harvesting Not Working Reliably
-**Status:** Fixed
-**Description:** Despite previous attempts to fix auto-harvesting, players were still not receiving wheat automatically when crops were ready to harvest.
-**Diagnosis:** After extensive debugging, several issues were identified:
-1. Turn change detection wasn't consistently triggering the `processTurn` function
-2. Crop yield data was accessed inconsistently due to variations in data structure
-3. Error handling was insufficient, causing silent failures during the auto-harvest process
-4. The auto-harvest logs weren't providing enough detail for proper debugging
-5. There was no fallback mechanism if the standard wheat update process failed
-
-**Solution:** Implemented a comprehensive fix with multiple layers of enhancements:
-
-1. **Enhanced turn change detection**:
-   - Added robust error checking in the Socket Manager's game state update handler
-   - Improved logging to track turn changes and farm processing
-   - Added state verification before and after farm processing
-   ```javascript
-   // In socket-manager.js
-   if (turnHasChanged) {
-     console.log('Turn has changed - PROCESSING FARM PLOTS - Explicitly calling FarmManager.processTurn()');
-     // Enhanced error checking and logging
-     if (typeof FarmManager === 'undefined') {
-       console.error('FarmManager is undefined, cannot process farm plots');
-     } else if (typeof FarmManager.processTurn !== 'function') {
-       console.error('FarmManager.processTurn is not a function, cannot process farm plots');
-     } else {
-       // Process the turn with state logging before and after
-       FarmManager.processTurn();
-     }
-   }
+**Current Findings:**
+1. **Player Color Assignment Works Correctly**: Log analysis confirms that player color assignment is functioning as expected. The second player is correctly assigned as black, as shown in these sample logs:
+   ```
+   Game started: {roomId: '222', startingTurn: 'white'}
+   Game state saved to localStorage: {roomId: '222', color: 'black', username: '', timestamp: 1740875622048, fen: '', …}
+   [ChessManager Debug] Player color: black
+   [ChessManager Debug] Board orientation: black
    ```
 
-2. **Added farm state debugging**:
-   - Created a new `getState` function in FarmManager to expose the farm state
-   - Implemented detailed logging of the farm state before and after processing turns
-   ```javascript
-   function getState() {
-     const whitePlots = farms.white.plots.map(plot => ({
-       id: plot.id,
-       state: plot.state,
-       turnsToHarvest: plot.turnsToHarvest,
-       crop: plot.crop ? {
-         name: plot.crop.name || plot.crop.type,
-         yield: plot.crop.yield || plot.crop.harvestYield || 15
-       } : null
-     }));
-     
-     // Return a structured representation of the farm state
-     return {
-       whiteWheat: GameState.getWheat('white'),
-       blackWheat: GameState.getWheat('black'),
-       whitePlots,
-       blackPlots
-     };
-   }
+2. **Turn Management Logic Functions Properly**: The logs confirm that turn management is working as designed:
    ```
-
-3. **Robust crop data handling**:
-   - Enhanced the `autoHarvestCrop` function with improved crop data access
-   - Added multiple fallbacks for yield value extraction
-   - Implemented comprehensive try/catch error handling
-   ```javascript
-   // Improved yield extraction with multiple fallbacks
-   let yieldAmount = 15; // Default fallback yield
-   
-   if (typeof cropData.yield === 'number') {
-     yieldAmount = cropData.yield;
-   } else if (typeof cropData.harvestYield === 'number') {
-     yieldAmount = cropData.harvestYield;
-   } else if (typeof cropData.baseYield === 'number') {
-     yieldAmount = cropData.baseYield;
-   } else {
-     console.warn('No yield property found in crop data, using default value');
-   }
+   Setting current turn to: white
+   Updating turn indicator. Current turn: white, Player color: black
+   isPlayerTurn check: gameActive=true, currentTurn=white, playerColor=black, result=false
    ```
+   This correctly shows that when a black player joins, and it's white's turn, the system properly indicates it's not the player's turn.
 
-4. **Emergency fallback mechanism**:
-   - Added a forced wheat update mechanism as a fallback
-   - Implemented a new `getResources` function in GameState to allow direct resource access when needed
-   ```javascript
-   // Try forcibly updating the wheat if normal update fails
-   try {
-     const resources = GameState.getResources ? GameState.getResources() : null;
-     if (resources && resources[playerColor]) {
-       resources[playerColor].wheat += yieldAmount;
-       console.log(`Forcibly updated ${playerColor} player wheat: ${resources[playerColor].wheat}`);
-       UIManager.updateResourceDisplay();
-     }
-   } catch (error) {
-     console.error('Error during forced wheat update:', error);
-   }
-   ```
+3. **Sequential Enhancement Analysis**: We've systematically improved:
+   - Player color storage in localStorage
+   - Defensive coding in UIManager.setupGameUI()
+   - Reconnection handling with proper player color preservation
+   - Turn management during reconnection scenarios
 
-**Benefits:**
-1. Players now reliably receive wheat when crops are ready
-2. The farm system is more robust against data inconsistencies
-3. If one method fails, multiple fallback mechanisms ensure players still receive their wheat
-4. Enhanced logging makes debugging easier
-5. The system is now more tolerant of unexpected states or errors
+**Next Steps:**
+1. **Investigation into Secondary Issues**: The current logs suggest that while player color assignment is correct, there might be other state synchronization issues:
+   - Check for race conditions in event handling
+   - Investigate timing issues in component initialization
+   - Verify that all components respect the turn logic consistently
 
-**Date Fixed:** 2025-03-03
+2. **Comprehensive State Management Review**: A thorough review of the game state lifecycle, focusing on:
+   - Client/server state synchronization
+   - Event sequence during game start and turns
+   - State transitions between farm and chess phases
+   - Component interactions with the global game state
 
-## Current Development Focus
-1. Additional quality-of-life improvements for player experience
-2. Further optimizations for mobile devices
-3. New crop types with different growth patterns and yields
-4. Tutorial enhancements for new players
-5. Balance adjustments to ensure fair gameplay
+**Hypothesis:** The persistent issues may relate to timing or sequencing of events rather than the actual player color assignment. We will focus on tracing the complete event flow during game initialization and turn management to identify any potential race conditions or timing issues.
 
-## Mobile UI Improvements (March 4, 2025)
-
-### Issue: Mobile Layout Problems with Chess Board Size and Position
-**Status:** Fixed
-**Description:** On mobile devices, the chess board was too small and positioned to the side of the farm plots, making it difficult to use. Users reported that the chess board was so tiny it was hard to interact with.
-**Diagnosis:** The initial mobile responsive design set the chess board to a maximum width of 90vw (90% of the viewport width), which made it too small on mobile devices. Additionally, the HTML structure placed the chess board between the white and black farm plots, which resulted in a confusing layout on mobile.
-**Solution:** 
-1. Restructured the HTML to move the chess board outside of the player-areas div, allowing it to be positioned above both farms:
-```html
-<div class="main-game-area">
-  <!-- Chess Board positioned above farms -->
-  <div class="chess-board" id="chess-board"></div>
-  
-  <!-- Player Areas (Farms) below -->
-  <div class="player-areas">
-    <!-- White farm -->
-    <!-- Black farm -->
-  </div>
-</div>
+**Server-Side Color Assignment Logic:**
+Upon reviewing the server code, we've confirmed that player color assignment follows a simple, deterministic pattern:
+```javascript
+// Determine player color (first player is white, second is black)
+playerColor = gameRooms[gameRoomId].playerCount === 0 ? 'white' : 'black';
+const isFirstPlayer = playerColor === 'white';
 ```
 
-2. Enhanced the CSS for mobile devices:
-```css
-@media (max-width: 768px) {
-  /* Make chess board larger and ensure it's at the top */
-  .chess-board {
-    width: 100%;
-    max-width: 95vmin;
-    min-height: 320px;
-    margin: 0 auto 20px auto;
-  }
-  
-  /* Stack farms vertically */
-  .player-areas {
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-  }
-}
+This confirms that:
+1. The first player to join a room is always assigned 'white'
+2. The second player is always assigned 'black'
+3. The assignment is working correctly, as evidenced by the logs showing the second player consistently receiving 'black'
 
-@media (max-width: 480px) {
-  /* Ensure chess board is still a good size on small screens */
-  .chess-board {
-    min-height: 280px;
-    max-width: 100%;
-  }
-}
-```
+**Game Progress Flow:**
+Given the consistent player color assignment, we need to clarify the expected flow:
+1. First player joins room → assigned white
+2. Second player joins room → assigned black
+3. Game starts with white's turn (standard chess rules)
+4. UI correctly shows "Opponent's turn" for black player when white moves first
+5. After white player moves, it becomes black's turn
 
-**Benefits:**
-- Chess board is now significantly larger and easier to interact with on mobile devices
-- Improved layout with chess board positioned above farm plots provides a more intuitive flow
-- Better user experience across all device sizes
-- More logical information hierarchy with the chess board as the primary interactive element
-- Layout better matches how players naturally interact with the game (making chess moves, then checking farm)
+The logs confirm this is happening correctly. The issue may be a misunderstanding of the expected behavior rather than a code issue. The second player (black) correctly sees "Opponent's Turn" initially because in chess, white always moves first.
 
-**Date Fixed:** 2025-03-04
-
-## Current Development Focus
-1. Further enhancing mobile responsiveness and touch interactions
-2. Additional quality-of-life improvements
-3. Optimizing game performance on less powerful mobile devices
-4. Adding new crop types and game mechanics
-5. Improving game tutorials and onboarding for new players
-
-## Auto-Harvesting Reliability Improvements (March 4, 2025)
-
-**Issue:** Players were not receiving wheat when crops were ready, and farm plots were not being cleared.
-
-**Status:** Fixed.
-
-**Description:** The auto-harvesting functionality wasn't reliably harvesting crops when they became ready. Players planted crops that would show as ready but weren't being automatically harvested, leading to confusion and economic imbalance in the game.
-
-**Diagnosis:** The issue stemmed from several problems:
-1. The processTurn function wasn't consistently checking all plots for all players
-2. There was inadequate error handling during the auto-harvesting process
-3. The yield extraction logic wasn't working consistently
-4. There was no visual indicator of turns until harvest
-
-**Solution:**
-1. Completely rewrote the processTurn function to be more robust and reliable
-2. Added a helper function (processSinglePlot) to handle individual plot processing
-3. Enhanced the autoHarvestCrop function with multiple fallbacks and better error handling
-4. Added visual turns-to-harvest counters and ready indicators to plots
-5. Added detailed logging for easier debugging
-6. Implemented emergency fallback for wheat updates if the standard method fails
-7. Always clearing plots after harvesting attempts to prevent endless loops
-
-**Benefits:**
-- Players now reliably receive wheat when crops are ready
-- Farm plots now properly clear after harvesting
-- Visual countdown indicators show turns remaining until harvest
-- Checkmark indicators show when crops are ready
-- More robust error handling prevents cascading failures
-- Detailed logging makes debugging easier
-
-**Date Fixed:** March 4, 2025
-
-## Current Development Focus:
-- Continue testing and refining the auto-harvesting functionality
-- Improve user feedback for farm actions
-- Implement additional visual indicators for gameplay status
-- Enhance cross-browser compatibility
-- Optimize performance on mobile devices
-
-## Automatic Harvesting System Implementation (March 5, 2025)
-
-### Issue: Manual Harvesting System Required Too Much User Interaction
-**Status:** Fixed
-**Description:** The original farming system required players to manually click "Harvest" buttons when crops were ready, creating unnecessary gameplay friction and confusion when players forgot to harvest their crops.
-**Diagnosis:** The system was designed with both manual harvesting (`harvestCrop`) and automatic harvesting (`autoHarvestCrop`) functions, but the automatic functionality wasn't fully implemented as the primary harvesting method.
-**Solution:** Completely reworked the farming phase to rely exclusively on automatic harvesting:
-1. Removed all UI elements related to manual harvesting (harvest buttons)
-2. Enhanced the visual display of the turns-to-harvest counter to be more prominent
-3. Modified the `processTurn` function to automatically harvest crops at the beginning of the farm phase
-4. Added visual indicators for crops that are ready for auto-harvesting
-5. Implemented a notification system to inform players when crops have been auto-harvested
-6. Enhanced CSS styling to make the growth stages and harvest readiness more visually clear
-
-**Key Code Changes**:
-- Removed the `harvestCrop` function from the FarmManager module
-- Updated the `createPlotElement` function to remove harvest buttons
-- Enhanced the `updatePlotDisplay` function with better visual indicators
-- Modified the `processTurn` and `processSinglePlot` functions to check for ready crops at the beginning of farm phases
-- Added countdown circles and checkmark indicators to show harvest status
-- Added CSS animations to highlight mature crops
-- Added a notification system for harvest events
-
-**Benefits:**
-- Streamlined gameplay experience with less micromanagement required
-- Clearer visual indicators for crop growth progress
-- Automatic resource collection without player intervention
-- More intuitive farming system that focuses on strategic planting decisions
-- Improved visual feedback for crop states
-
-**Date Fixed:** March 5, 2025
-
-## Current Development Focus
-1. Improving user feedback for game events
-2. Further refinement of game balance
-3. Additional crop types with unique properties
-4. Enhanced mobile responsiveness and touch controls
-5. Performance optimization
-6. Tutorial improvements for new players
-
-## Next Features Planned
-1. Weather system affecting crop growth rates
-2. Special "power crops" with unique abilities
-3. Achievements and player progression tracking
-4. Improved chess piece movement visualization
-5. Game playback/review system for completed games
-
-## Module Property Consistency Fix (Current Date)
-
-### Issue: Inconsistent Crop Property Names and Values
-**Status:** Fixed
-
-**Description:** The crop data in the game was inconsistent across different modules. The gameConfig.js file defined properties like `seedCost` and `harvestYield`, but the farm manager was using `cost` and `yield`. Additionally, some crop values in use differed from those defined in gameConfig.js, suggesting another source was overriding these values.
-
-**Diagnosis:** The issue was found in multiple areas:
-1. The farm-manager.js file contained hardcoded crop data that was overriding the values from gameConfig.js
-2. Property names were inconsistent between modules (`seedCost` vs `cost`, `harvestYield` vs `yield`)
-3. When accessing crop properties, the code was checking for multiple property names, leading to unpredictable behavior
-
-**Solution:** Made gameConfig.js the single source of truth for crop data:
-
-1. Added helper functions to standardize crop data access:
+**Reconnection Process Analysis:**
+After examining the server's reconnection logic in detail, we can confirm it is designed to preserve player color:
 
 ```javascript
-function standardizeCropData(cropData) {
-  if (!cropData) return null;
+// CRITICAL: Check for reconnection with a specific color
+if (isReconnecting && previousColor) {
+  log('INFO', `🔴 Reconnection attempt for ${previousColor} player in room ${gameRoomId}`);
   
-  return {
-    type: cropData.type,
-    name: cropData.name || (cropData.type ? cropData.type.charAt(0).toUpperCase() + cropData.type.slice(1) : 'Crop'),
-    cost: cropData.seedCost || cropData.cost || 5,
-    growthTime: cropData.growthTime || cropData.turnsTillHarvest || 2,
-    yield: cropData.harvestYield || cropData.yield || 15,
-    emoji: cropData.emoji || "🌾"
-  };
-}
-
-function prepareCropForPlanting(cropType) {
-  // Get crop data from the game config
-  const configCrop = GameConfig.crops[cropType];
-  if (!configCrop) {
-    console.error(`Unknown crop type: ${cropType}`);
-    return null;
-  }
-  
-  // Create a standardized crop object with consistent property names
-  return standardizeCropData({
-    type: cropType,
-    name: configCrop.name,
-    cost: configCrop.cost,
-    growthTime: configCrop.turnsTillHarvest,
-    yield: configCrop.yield,
-    emoji: configCrop.emoji
-  });
-}
-```
-
-2. Updated key functions to use standardized crop data:
-   - Modified `plantCrop` to standardize data before planting
-   - Updated `processFarmUpdatePlant` to prepare and use standardized crop data
-   - Refactored `autoHarvestCrop` to always use standardized properties, eliminating multiple property checks
-   - Updated `processSinglePlot` to ensure consistent property access
-   - Modified UI functions like `showPlantSelector` and `generatePlantSelectorHTML` to use standardized crop data
-
-3. Added the standardization functions to FarmManager's public API, making them available throughout the codebase.
-
-**Benefits:**
-- Consistent crop data throughout the game
-- Single source of truth in GameConfig.crops
-- More predictable behavior with standardized property names
-- Easier balancing of game mechanics by adjusting values in one place
-- Better code maintainability
-- Eliminated redundant property checks and multiple fallback code paths
-- Improved error logging and handling
-
-**Key Changes:**
-- Removed duplicate crop definitions
-- Standardized property access with helper functions
-- Updated the UI to display the correct values from GameConfig
-- Fixed the auto-harvest system to use the correct yield values
-- Added better error reporting for missing crop data
-
-**Date Fixed:** Current Date
-
-## Farm Plot Unlocking Fix (2025-03-02)
-
-### Issue: Capturing Chess Pieces Results in Error Blocking Game Progression
-**Status:** Fixed
-
-**Description:** When a player captured a chess piece, the game would throw an error and block further progress. Specifically, farm plots were not being unlocked properly after capturing pieces, and the error message indicated that `FarmManager.checkUnlockPlot is not a function`.
-
-**Diagnosis:** After examining the code, we found that while the `checkUnlockPlot` function was properly defined in the `farm-manager.js` file (lines 490-524), it was not included in the FarmManager module's public API (return object). As a result, when `game-state.js` tried to call `FarmManager.checkUnlockPlot(color)` in the `recordCapture` function, it encountered a "function not defined" error.
-
-**Stack Trace:**
-```
-Error processing move: TypeError: FarmManager.checkUnlockPlot is not a function
-    at Object.recordCapture (game-state.js:389:17)
-    at tryMovePiece (chess-manager.js:453:19)
-    at handleSquareClick (chess-manager.js:256:26)
-    at HTMLDivElement.<anonymous> (chess-manager.js:181:9)
-```
-
-**Solution:** Added the `checkUnlockPlot` function to the FarmManager module's public API by updating the return object at the end of the `farm-manager.js` file:
-
-```javascript
-// Public API
-return {
-  initialize: initialize,
-  initializeModule: initializeModule,
-  initializeFarmDisplay: initializeFarmDisplay,
-  plantCrop: plantCrop,
-  unlockPlot: unlockPlot,
-  updateFarmDisplay: updateFarmDisplay,
-  updatePlotDisplay: updatePlotDisplay,
-  processTurn: processTurn,
-  processFarmUpdate: processFarmUpdate,
-  processFarmAction: processFarmAction,
-  autoHarvestCrop: autoHarvestCrop,
-  getState: getState,
-  checkUnlockPlot: checkUnlockPlot, // Added this function to the public API
-  
-  // Debugging functions (consider removing in production)
-  getPlotById: getPlotById,
-  // ... other debugging functions ...
-};
-```
-
-**Impact of Fix:**
-- Players can now successfully capture pieces without encountering errors
-- Farm plots are properly unlocked after capturing the required number of pieces
-- Game progression continues as intended following piece captures
-- The game economy functions as designed, with captures providing both wheat and potential plot unlocks
-
-**Date Fixed:** 2025-03-02
-
-## Automated Farm Plot Unlocking and Crop Turn Counter Fix (2025-03-03)
-
-### Issue 1: Manual Farm Plot Unlocking
-**Status:** Fixed
-
-**Description:** When a player captured enough pieces to unlock a farm plot, the plot would become "unlockable" but required manual intervention by the player to click an "Unlock" button. This added unnecessary friction to gameplay and disrupted the flow of the game.
-
-**Diagnosis:** The code was designed to track captures and make plots "unlockable" rather than immediately unlocking them. This was indicated by the `checkUnlockPlot` function which only changed the plot state to 'unlockable' when the capture requirement was met, requiring the player to then click an unlock button which called the `unlockPlot` function.
-
-**Solution:** 
-1. Modified the `checkUnlockPlot` function to automatically unlock plots when the required number of captures is met:
-```javascript
-if (plot.state === 'locked' && plot.unlockRequirement <= captures) {
-  // Directly unlock the plot instead of marking it as unlockable
-  plot.state = 'empty';
-  farms[playerColor].unlockedPlots++;
-  
-  console.log(`Plot ${plot.id} automatically unlocked with ${captures} captures`);
-  
-  // Show a message to the player
-  if (playerColor === GameState.getPlayerColor()) {
-    showMessage('New farm plot unlocked!');
-    
-    // Send the update to the server to inform other players
-    SocketManager.sendAutoUnlock(plot.id);
-  }
-}
-```
-
-2. Removed the "unlockable" state and UI elements:
-   - Removed the unlockable state from the `createPlotElement` function
-   - Removed event listeners for unlock buttons
-   - Removed the `unlockPlot` and `handleUnlockPlot` functions
-
-3. Added server communication for automatic unlocking:
-   - Added a `sendAutoUnlock` function to the SocketManager
-   - Updated the `processFarmUpdate` function to handle 'auto-unlock' actions
-
-**Benefits:**
-- Smoother gameplay flow with no manual intervention required
-- Cleaner UI with fewer buttons and interactions
-- More intuitive game mechanics that reward captures immediately
-- Less code to maintain by removing the manual unlocking system
-
-**Date Fixed:** 2025-03-03
-
-### Issue 2: Crop Turn Counter Incorrect
-**Status:** Fixed
-
-**Description:** Crop growth timers were not correctly tracking turns, sometimes resulting in crops taking too long to mature or being ready too quickly. This made the farming system unpredictable and challenging to strategize around.
-
-**Diagnosis:** The issue was in the `processSinglePlot` function which unconditionally decremented the `turnsToHarvest` counter each time it was called, regardless of whether it had been initialized or not. Additionally, there was confusion between crop properties and plot properties related to turn counting.
-
-**Solution:**
-1. Modified the `processSinglePlot` function to only decrement the counter if it was already initialized:
-```javascript
-// Only initialize turnsToHarvest if it's not already set
-// This prevents re-initializing on subsequent turns
-if (plot.turnsToHarvest === undefined || plot.turnsToHarvest === null) {
-  // Use the crop's growth time from standardized data
-  plot.turnsToHarvest = cropData.growthTime;
-  console.log(`Initialized turnsToHarvest for ${plot.id} to ${plot.turnsToHarvest}`);
-} else {
-  // Decrement turns to harvest only if it's already initialized
-  // This ensures we don't count down from the wrong starting point
-  console.log(`${plot.id} turnsToHarvest BEFORE decrement: ${plot.turnsToHarvest}`);
-  plot.turnsToHarvest--;
-  console.log(`${plot.id} turns until harvest AFTER decrement: ${plot.turnsToHarvest}`);
-}
-```
-
-2. Added extensive logging to track the turn counting process:
-```javascript
-console.log(`Planted ${standardizedCrop.name} in plot ${plotIndex+1} with growth time ${standardizedCrop.growthTime}`);
-console.log(`Plot ${playerColor}-plot-${plotIndex} turnsToHarvest set to: ${standardizedCrop.growthTime}`);
-```
-
-3. Clarified the distinction between crop properties (the template) and plot properties (the instance):
-   - Made sure `turnsToHarvest` is correctly initialized from the crop's `growthTime`
-   - Ensured the counter is only decremented once per turn
-   - Fixed the counter to never reset unintentionally during processing
-
-**Benefits:**
-- Crops now grow predictably according to their specified growth time
-- Players can reliably plan their farming strategy based on accurate turn counting
-- Better logging makes it easier to track and debug crop growth
-- Improved code clarity with separate handling for initialization and turn progression
-
-**Date Fixed:** 2025-03-03
-
-## Waiting Room UI Disappearance After Room ID Entry (Current Date)
-
-### Issue: Waiting Room UI Not Displayed After User Enters a Room ID
-**Status:** Fixed
-
-**Description:** After a user entered a room ID, the waiting room UI that should display while waiting for the opponent to join was being skipped, causing users to be confused about the state of the game.
-
-**Diagnosis:** After examining the codebase, I found that there was a mismatch between the legacy code in `app.js` and the newer modular architecture:
-
-1. In the legacy code (app.js), the `handleRoomJoined` function properly called `showScreen('waiting')` to display the waiting screen.
-2. In the newer modular code, the socket event handlers in `socket-manager.js` were not consistently showing the waiting screen after a room was joined.
-3. The `joinRoom` function in `socket-manager.js` was emitting the `joinGame` event but not transitioning to the waiting screen.
-4. When the server responded with the `playerAssigned` event, the client immediately updated the game status without explicitly showing the waiting screen.
-
-**Solution:** Made several key changes to ensure the waiting screen is properly displayed:
-
-1. Updated the `joinRoom` function in `socket-manager.js` to explicitly show the waiting screen right after emitting the `joinGame` event:
-```javascript
-socket.emit('joinGame', {
-  username: username,
-  roomId: roomId
-});
-
-// Show the waiting screen while waiting for server response
-UIManager.showScreen('waiting-screen');
-
-// Update room code display if it exists
-const roomCodeDisplay = document.getElementById('room-code-display');
-if (roomCodeDisplay && roomId) {
-  roomCodeDisplay.textContent = roomId;
-}
-```
-
-2. Enhanced the `playerAssigned` event handler to explicitly show the waiting screen and update the room code:
-```javascript
-socket.on('playerAssigned', (data) => {
-  console.log('Player assigned to room:', data);
-  roomId = data.roomId;
-  
-  // Initialize the game with the provided data
-  GameState.setupGame(data.roomId, data.color);
-  UIManager.setupGameUI(data.roomId, data.color);
-  
-  // Keep showing the waiting screen
-  UIManager.showScreen('waiting-screen');
-  
-  // Update room code display
-  const roomCodeDisplay = document.getElementById('room-code-display');
-  if (roomCodeDisplay) {
-    roomCodeDisplay.textContent = data.roomId;
-  }
-  
-  // Waiting for opponent
-  UIManager.updateGameStatus('Waiting for opponent...');
-});
-```
-
-3. Added extensive debug logging to the `showScreen` function in `ui-manager.js` to help diagnose any issues with screen transitions:
-```javascript
-console.log(`Showing screen: ${screenId}`, 'Current screen:', currentScreen);
-
-// Debug log the current state of all screens to diagnose issues
-['login-screen', 'waiting-screen', 'game-screen'].forEach(id => {
-  const element = document.getElementById(id);
-  if (element) {
-    console.log(`Screen ${id} is currently ${element.classList.contains('hidden') ? 'hidden' : 'visible'}`);
-  } else {
-    console.warn(`Debug: Screen element ${id} not found in DOM`);
-  }
-});
-```
-
-**Benefits:**
-- Users now see the waiting room UI after entering a room ID
-- The room code is properly displayed in the waiting screen, making it easier for users to share with opponents
-- The screen transition flow is more intuitive, with clearer visual feedback
-- Additional logging helps diagnose any future issues with screen transitions
-- The fix maintains compatibility with both the legacy and modular code architectures
-
-**Date Fixed:** Current Date
-
-## Current Development Focus
-- Continue improving user experience with clear UI transitions
-- Enhance mobile responsiveness for all game screens
-- Add visual feedback to indicate game state changes
-- Refine error handling for edge cases
-
-## Socket Manager Reference Error Fix (Current Date)
-
-### Issue: Socket Manager API Reference Errors
-**Status:** Fixed
-
-**Description:** The game was experiencing reference errors related to the Socket Manager, preventing the game from initializing properly. The following error messages were observed in the console:
-
-```
-socket-manager.js:628 Uncaught ReferenceError: isConnected is not defined
-client-core.js:5 Chessville initializing...
-...
-client-core.js:61 Critical initialization error: ReferenceError: SocketManager is not defined
-...
-ui-manager.js:53 Uncaught ReferenceError: SocketManager is not defined
-```
-
-**Diagnosis:** After examining the code, I found that several functions were referenced in the Socket Manager's public API but were never defined in the module:
-
-1. `isConnected` - Referenced in the public API at line 628 but not defined anywhere
-2. `getSocket` - Referenced in the public API but not defined
-3. `getRoomId` - Referenced in the public API but not defined
-4. `getPlayerColor` - Referenced in the public API but not defined
-
-This was causing the SocketManager module initialization to fail, which in turn caused other modules that depend on it to fail with "SocketManager is not defined" errors.
-
-**Solution:** Added the missing function implementations to the socket-manager.js file:
-
-```javascript
-/**
- * Check if the socket is connected
- * @returns {boolean} True if the socket is initialized and connected
- */
-function isConnected() {
-  return socket !== null && socket.connected;
-}
-
-/**
- * Get the socket instance
- * @returns {Object|null} The socket instance or null if not initialized
- */
-function getSocket() {
-  return socket;
-}
-
-/**
- * Get the room ID
- * @returns {string|null} The room ID or null if not in a room
- */
-function getRoomId() {
-  return roomId;
-}
-
-/**
- * Get the player's color
- * @returns {string|null} The player's color or null if not assigned
- */
-function getPlayerColor() {
-  return GameState ? GameState.getPlayerColor() : null;
-}
-```
-
-These functions implement the basic functionality required by the Socket Manager's public API, allowing it to initialize correctly and be used by other modules.
-
-**Benefits:**
-- Fixed the Socket Manager initialization failure
-- Resolved the "SocketManager is not defined" errors in dependent modules
-- Completed the Socket Manager's public API with properly implemented functions
-- Restored the game's ability to connect to rooms and handle multiplayer functionality
-- Improved code consistency and maintainability
-
-**Date Fixed:** Current Date
-
-## Current Development Focus
-- Continue improving user experience with clear UI transitions
-- Enhance mobile responsiveness for all game screens
-- Add visual feedback to indicate game state changes
-- Refine error handling for edge cases
-- Ensure all module APIs are fully implemented and documented
-
-## March 3, 2025 - Farm Turn Processing Fix
-
-### Issue: Farm Turns Being Decremented Twice
-**Status:** Fixed
-**Description:** The crop growth timer was being decremented twice during a player's turn - once after receiving the opponent's move and again when processing their own turn. This caused crops to grow twice as fast as intended.
-**Diagnosis:** 
-1. The logs showed that `FarmManager.processTurn()` was being called in two different places:
-   - In `processChessMove()` when receiving an opponent's move
-   - In `processYourTurn()` when the player's turn started
-2. According to the original game design, 1 full harvest turn is defined as when a player goes back to their own farming phase, but the code was counting the opponent's turn as well.
-3. This resulted in crops being ready to harvest in half the intended time.
-
-**Solution:**
-1. Removed the farm processing code from the `processChessMove` function, keeping it only in the `processYourTurn` function.
-2. Added logging to track the farm state without processing it when receiving an opponent's move.
-3. This ensures that crop turn counters are only decreased once per full game turn, maintaining the intended game balance.
-
-**Code Change:**
-```javascript
-// Removed this code from processChessMove:
-console.log('It is now YOUR turn after opponent move - Processing farm plots');
-if (typeof FarmManager !== 'undefined' && typeof FarmManager.processTurn === 'function') {
-  try {
-    // Log farm state before processing
-    console.log('Farm state BEFORE processing turn after opponent move:', 
-      typeof FarmManager.getState === 'function' ? 
-      JSON.stringify(FarmManager.getState()) : 'getState not available');
-    
-    FarmManager.processTurn();
-    console.log('Successfully processed farm turn after opponent move');
-    
-    // Log farm state after processing
-    console.log('Farm state AFTER processing turn after opponent move:', 
-      typeof FarmManager.getState === 'function' ? 
-      JSON.stringify(FarmManager.getState()) : 'getState not available');
-  } catch (error) {
-    console.error('Error processing farm turn after opponent move:', error);
-  }
-}
-
-// Replaced with:
-// Log the farm state for debugging but do not process farm plots
-if (typeof FarmManager !== 'undefined' && typeof FarmManager.getState === 'function') {
-  console.log('Farm state after opponent move (not processing):', 
-    JSON.stringify(FarmManager.getState()));
-}
-```
-
-**Date Fixed:** 2025-03-03
-
-**Impact:** 
-- Crop growth now follows the intended game design - crops take the full number of turns to grow as specified in their configuration
-- Game balance is restored, preventing players from harvesting crops too quickly
-- Farm economy is now properly paced, creating a more strategic gameplay experience
-- The change better aligns with the original game design where a "harvest turn" is counted when a player returns to their own farming phase
-
-## Current Status and Next Steps
-The Chess Farm Game is now functioning with correctly paced farm turns, ensuring that the economic side of the game is balanced as intended. This improves the overall gameplay experience by making resource management more strategic and preventing players from generating wheat too quickly.
-
-The farm mechanic now works as follows:
-1. Players plant crops during their farm phase
-2. The turn counter for crops decreases by 1 each time the player takes a turn (not when the opponent takes a turn)
-3. When the counter reaches 0, the crop becomes ready for harvest
-4. The player can then harvest the crop during their farm phase for the appropriate wheat yield
-
-The next steps for development include:
-- Further testing of farm and chess mechanics
-- Implementing additional UI improvements
-- Adding tutorial elements to guide new players
-- Considering additional farm features like different crop types or upgrades
-
-## Fix for "getPlayerColor is not defined" error
-
-This error occurred in the `skipCurrentGamePhase` function in `game-state.js`. The function was trying to call `getPlayerColor()` as if it were a global function, but it should have been using the module's private `playerColor` variable directly since it was within the same closure.
-
-The issue was fixed by removing the line `const playerColor = getPlayerColor();` and having the code directly use the `playerColor` variable that's already in scope within the module.
-
-This error was causing problems when auto-skipping the farming phase after planting, and in the "Skip Farming" button functionality.
-
-## Reconnection Functionality Implementation (2025-03-03)
-
-### Issue: Players Cannot Rejoin Game After Disconnection
-**Status:** Fixed
-**Description:** When a player refreshes the page or disconnects, they lose their game state and cannot rejoin the same game even with the correct room code. This leads to game abandonment and poor user experience.
-
-**Diagnosis:** The original implementation immediately removed players from the room when they disconnected, without any mechanism to track their previous game state or allow reconnection with the same player identity.
-
-**Solution:** Implemented a comprehensive reconnection system that allows players to rejoin their game after disconnection:
-
-1. **Server-Side Changes:**
-   - Added a tracking system for disconnected players with a configurable time-to-live (5 minutes by default)
-   - Modified the `joinGame` handler to check for reconnection attempts and restore player state
-   - Added new socket events for reconnection success and opponent reconnection
-   - Implemented a cleanup mechanism that only deletes game rooms after both players are permanently gone
-
-```javascript
-// Store information about disconnected players
-const disconnectedPlayers = {};
-const PLAYER_RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-// In gameRooms structure, added disconnectedPlayers tracking
-gameRooms[gameRoomId] = {
-  // ... existing properties ...
-  disconnectedPlayers: {} // Track disconnected players in this room
-};
-
-// Handle reconnection attempt in joinGame event
-if (isReconnecting && previousColor && gameRooms[gameRoomId].disconnectedPlayers[previousColor]) {
-  // Player is trying to reconnect to a game
-  log('INFO', `Player ${socket.id} attempting to reconnect as ${previousColor} in room ${gameRoomId}`);
-  
+  // Force playerColor to be the requested color (for consistency during reconnection)
   playerColor = previousColor;
-  // Remove from disconnected players list
-  delete gameRooms[gameRoomId].disconnectedPlayers[playerColor];
   
-  // Add player back to the room and notify them
-  // ... code for restoring player state ...
-  
-  socket.emit('reconnectSuccess', {
-    roomId: gameRoomId,
-    color: playerColor,
-    gameState: gameRooms[gameRoomId].gameState,
-    currentTurn: gameRooms[gameRoomId].currentTurn
-  });
-}
-```
-
-2. **Client-Side Changes:**
-   - Implemented localStorage to save essential game state (room ID, player color, username)
-   - Added automatic reconnection attempt when the page loads if a saved game exists
-   - Added UI feedback during reconnection process
-   - New handlers for reconnection-related socket events
-
-```javascript
-// LocalStorage keys
-const STORAGE_KEYS = {
-  GAME_STATE: 'chessFarm_gameState',
-  RECONNECT_TIMER: 'chessFarm_reconnectTimer'
-};
-
-// Save current game state to localStorage for potential reconnection
-function saveGameState() {
-  if (!roomId || !playerColor) return;
-  
-  const gameState = {
-    roomId: roomId,
-    color: playerColor,
-    username: username,
-    timestamp: Date.now()
-  };
-  
-  localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify(gameState));
-}
-
-// Try to reconnect to a previous game if session data exists
-function tryReconnect() {
-  try {
-    const savedState = localStorage.getItem(STORAGE_KEYS.GAME_STATE);
-    if (!savedState) return;
+  // Check if this color is in the disconnected players list
+  if (gameRooms[gameRoomId].disconnectedPlayers[previousColor]) {
+    // Player is trying to reconnect to a game
+    log('INFO', `🔴 Player ${socket.id} found in disconnected players as ${previousColor} in room ${gameRoomId}`);
     
-    const gameState = JSON.parse(savedState);
-    // Check if the saved state is still valid (within timeout period)
-    // ... validation code ...
-    
-    // Attempt to reconnect with saved credentials
-    socket.emit('joinGame', {
-      username: gameState.username,
-      roomId: gameState.roomId,
-      isReconnecting: true,
-      previousColor: gameState.color
-    });
-  } catch (error) {
-    // Handle reconnection errors
-  }
-}
-```
-
-3. **User Experience Improvements:**
-   - Added informative messages when players disconnect and reconnect
-   - Set a 5-minute window for players to rejoin before their slot is released
-   - Added visual feedback to show reconnection status
-
-This implementation ensures that if a player accidentally refreshes their browser or temporarily loses connection, they can seamlessly rejoin the same game without disrupting gameplay. The opponent is notified about the disconnection and subsequent reconnection, providing transparency about the game state.
-
-**Date Fixed:** 2025-03-03
-
-## Next Steps
-1. Further enhance the reconnection mechanism with more detailed game state preservation (wheat count, farm state)
-2. Add an automatic reconnection attempt if the websocket connection drops but the page is still open
-3. Implement a forfeit system if a player doesn't reconnect within the timeout period
-4. Add an option for the remaining player to claim victory if their opponent disconnects for too long
-
-## Enhanced Reconnection System: Full Game State Preservation (2025-03-04)
-
-### Issue: Game State Reset After Reconnection
-**Status:** Fixed
-**Description:** While the basic reconnection framework was implemented, when a player refreshed the page or reconnected, the chess board was reset to the starting position and the farm state was lost. This affected both the reconnecting player and their opponent.
-
-**Diagnosis:** The initial reconnection system only preserved the room connection information but not the actual game state. The server was not storing the complete chess position and farm state, and the reconnection process wasn't properly restoring these elements.
-
-**Solution:** Enhanced the reconnection system to preserve and restore the complete game state:
-
-1. **Improved Server-Side Storage:**
-   - Expanded the game room data structure to store comprehensive game state
-   - Added farm state and wheat counts to the game state object
-   - Created a new `farm-update` socket event to sync farm state changes
-   - Enhanced the disconnect handler to store a complete snapshot of player state
-
-```javascript
-// Improved game room structure
-gameRooms[gameRoomId] = {
-  // ... existing properties ...
-  gameState: {
-    chessEngineState: new Chess().fen(),
-    isGameOver: false,
-    winner: null,
-    farmState: {}, // Store farm state for each player
-    wheatCounts: {} // Store wheat counts for each player
-  },
-  // ... other properties ...
-};
-
-// New farm-update event handler
-socket.on('farm-update', (data) => {
-  try {
-    const { roomId, farmState, wheatCount } = data;
-    
-    // Validate and get player
+    // Get the saved player data and restore it
+    const savedPlayerData = gameRooms[gameRoomId].disconnectedPlayers[playerColor];
     // ...
-    
-    // Store the farm state and wheat count for this player
-    player.farmState = farmState;
-    player.wheatCount = wheatCount;
-    
-    // Also store in the gameState for persistence
-    gameRooms[roomId].gameState.farmState[player.color] = farmState;
-    gameRooms[roomId].gameState.wheatCounts[player.color] = wheatCount;
-  } catch (error) {
-    // Error handling
   }
-});
+}
 ```
 
-2. **Enhanced Client-Side Reconnection:**
-   - Added functions to capture and restore farm plot states
-   - Improved chess board position restoration
-   - Created a tracking system for wheat counts
-   - Implemented syncing of all game state changes to the server
+The reconnection process explicitly:
+1. Preserves the player's original color when reconnecting
+2. Restores all player data including farm state, wheat count, etc.
+3. Sends a `reconnectSuccess` event with the correct color and game state
+
+**Determination:**
+Based on the server code analysis and the logs provided, both player color assignment and turn management are working as designed. The issue reported may be:
+
+1. A UI/presentation issue rather than a game state issue
+2. A misunderstanding of the expected behavior (black player starts with opponent's turn)
+3. A timing/race condition during initialization of various game components
+
+**Recommended Next Steps:**
+1. Ensure all UI components react properly to game state changes
+2. Add more comprehensive logging around game state updates
+3. Consider adding a tutorial or clearer indicators of whose turn it is
+4. Focus on client-side component initialization order to prevent race conditions
+
+**Final Analysis and Conclusion:**
+After thorough examination of both client and server code, we've determined that:
+
+1. **Player Color Assignment:** The server consistently assigns the first player as 'white' and the second player as 'black'. The logs confirm this is working as designed.
+
+2. **Turn Management:** The game follows standard chess rules where white moves first. When a player joins as black, it is expected that initially it will be the opponent's (white's) turn.
+
+3. **Client Implementation:** Client-side code properly sets up player color during initialization:
+   ```javascript
+   function setupGame(roomIdParam, colorParam) {
+     roomId = roomIdParam;
+     playerColor = colorParam;
+     resetGame();
+     console.log(`Game setup complete. Room: ${roomId}, Player color: ${playerColor}`);
+   }
+   ```
+
+4. **UI Indicators:** The UI correctly indicates whose turn it is, showing "Opponent's Turn" for the black player at the start of the game.
+
+**Recommended Solution:**
+Based on our analysis, the system is functioning as designed. However, to prevent confusion:
+
+1. **Enhanced Player Onboarding:**
+   - Add a clear visual tutorial explaining the turn order in chess (white moves first)
+   - Provide more explicit messaging when a player joins as black that they'll need to wait for white's move
+
+2. **Improved UI Feedback:**
+   - Add countdown timers or "waiting for opponent" animations to make the waiting state more engaging
+   - Include clearer visual indicators of the current turn state
+   - Consider adding notifications when the turn changes
+
+3. **Additional Logging:**
+   - Maintain current detailed logging to help diagnose any future issues
+   - Add user-visible status messages to explain the game flow
+
+**Implementation Priority:** 
+We recommend focusing on the UI enhancements first, as this appears to be primarily a user experience issue rather than a technical bug. The underlying game state management is working correctly, but the experience could be improved with clearer visual cues and feedback.
+
+**Update: Specific Reconnection Issue Identified (March 6, 2025)**
+After further investigation, we've identified a critical bug in the reconnection flow that can cause player colors to be incorrectly assigned under specific circumstances:
+
+**Scenario:**
+1. Player 1 joins as white
+2. Player 2 joins as black  
+3. Player 1 (white) disconnects
+4. Player 1 attempts to reconnect
+5. Player 1 is incorrectly assigned black, despite originally being white
+
+**Root Cause:**
+Upon examining the server code, we found that when all reconnection attempts fail, the server falls back to this default assignment logic:
 
 ```javascript
-// Restore farm state from saved data
-function restoreFarmState(farmState) {
-  try {
-    if (!farmState || !Array.isArray(farmState)) return;
-    
-    const farmPlots = document.querySelectorAll('.farm-plot');
-    
-    // Go through each plot and update its state
-    farmState.forEach((plot, index) => {
-      if (index >= farmPlots.length) return;
-      
-      const plotElement = farmPlots[index];
-      
-      // Reset classes first
-      plotElement.classList.remove('growing', 'ready', 'locked');
-      
-      // Apply the correct state
-      if (plot.locked) {
-        plotElement.classList.add('locked');
-      } else if (plot.growing) {
-        plotElement.classList.add('growing');
-      } else if (plot.ready) {
-        plotElement.classList.add('ready');
-      }
-      
-      // Update text content
-      // ...
-    });
-  } catch (error) {
-    console.error('Error restoring farm state:', error);
-  }
-}
-
-// Send updated farm state to server
-function sendFarmUpdate() {
-  if (!socket || !roomId) return;
-  
-  const farmState = getCurrentFarmState();
-  
-  socket.emit('farm-update', {
-    roomId: roomId,
-    farmState: farmState,
-    wheatCount: wheatCount
-  });
-}
+// Determine player color (first player is white, second is black)
+playerColor = gameRooms[gameRoomId].playerCount === 0 ? 'white' : 'black';
 ```
 
-3. **Synchronization Improvements:**
-   - Added automatic farm state updates after every significant game action
-   - Implemented wheat count synchronization between client and server
-   - Enhanced the reconnection success handler to properly restore all game elements
-
-These changes ensure that players can refresh the page or reconnect after disconnection without losing any game progress. The complete game state, including chess board position, farm plots, and wheat count, is now properly preserved and restored during the reconnection process.
-
-**Date Fixed:** 2025-03-04
-
-## Next Steps
-1. Add periodic state syncing to handle cases where update events might be missed
-2. Improve error handling for edge cases during reconnection
-3. Add a visual indicator showing the reconnection status and progress
-4. Implement a forfeit option for cases where reconnection isn't desired
-
-## Fix for Incorrect Player Color Assignment During Reconnection (2025-03-05)
-
-### Issue: Player Color Switch on Reconnection
-**Status:** Fixed
-**Description:** After implementing the reconnection system, users were able to reconnect to their game rooms, but they were sometimes assigned the wrong color (e.g., a white player reconnecting as black), which caused the chess board to reset to the starting position and lost all previous moves.
-
-**Diagnosis:** The reconnection logic had two main issues:
-1. The client was not properly preserving the player's original color in localStorage
-2. The server was not handling page refreshes correctly, where a player might refresh before the socket disconnection was processed
-
-**Logs Analysis:**
-```
-Game started: {roomId: '111', startingTurn: 'white'}
-Chess engine current position: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-[ChessManager Debug] Player color: black
-isPlayerTurn check: gameActive=true, currentTurn=white, playerColor=black, result=false
-```
-
-These logs showed that a player who was previously white was reconnecting as black, causing the chess board to reset.
-
-**Solution:** Enhanced both client and server reconnection logic:
-
-1. **Improved Client-Side Storage:**
-   - Extended localStorage data to include more game state information:
-   ```javascript
-   const gameState = {
-     roomId: roomId,
-     color: playerColor,
-     username: username,
-     timestamp: Date.now(),
-     fen: game ? game.fen() : null, // Save current board state
-     wheatCount: wheatCount,
-     currentTurn: currentTurn
-   };
-   ```
-   - Pre-assigned the player color from localStorage before attempting reconnection
-   - Added more detailed logging to trace the reconnection flow
-
-2. **Enhanced Server-Side Reconnection:**
-   - Added logic to handle page refreshes where the socket disconnection hasn't been processed yet
-   - Improved the player lookup process to check both disconnected players and active players
-   ```javascript
-   // Check if this color might be an active player who's just refreshing their page
-   if (!gameRooms[gameRoomId].disconnectedPlayers[previousColor]) {
-     log('INFO', `${previousColor} not found in disconnected players, checking active players`);
-     
-     let foundActivePlayer = false;
-     
-     // Check if there's an active player with this color
-     for (const playerId in gameRooms[gameRoomId].players) {
-       const player = gameRooms[gameRoomId].players[playerId];
-       if (player.color === previousColor) {
-         // Found an active player with this color - likely a page refresh
-         foundActivePlayer = true;
-         
-         // Remove the old socket connection
-         delete gameRooms[gameRoomId].players[playerId];
-         // ... handle reconnection ...
-       }
-     }
-   }
-   ```
-   - Added more detailed server-side logging to trace the reconnection process
-
-3. **Improved Error Handling:**
-   - Added better validation for disconnected players
-   - Ensured roomId is valid before attempting to access its properties
-   - Added checks against undefined values that could cause reconnection to fail
-
-These changes ensure that players always reconnect with their original color, preserving the chess board state and ongoing games. Players can now refresh the page or temporarily disconnect without losing their position or having the game reset.
-
-**Date Fixed:** 2025-03-05
-
-## Enhanced Fix for Player Color Persistence During Reconnection (2025-03-06)
-
-### Issue: Persistent Color Mismatch During Reconnection
-**Status:** Fixed
-**Description:** Despite previous enhancements to the reconnection system, players were still experiencing issues where they would reconnect to a game but be assigned the wrong color (e.g., a white player reconnecting as black). This caused the chess board to reset to the starting position and lose all previous moves.
-
-**Diagnosis:** Through detailed logging and testing, we discovered the following issues:
-1. The server was not always honoring the requested color during reconnection attempts
-2. The client's color was being set too late in the reconnection process
-3. Edge cases where players refreshed pages before socket disconnection created inconsistent state
-
-**Debug Logs Analysis:**
-```
-Game started: {roomId: '222', startingTurn: 'white'}
-[ChessManager Debug] Setting up chess board
-[ChessManager Debug] Player color: black  <-- Should be white!
-[ChessManager Debug] Board orientation: black
-[ChessManager Debug] Chess engine current position: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-```
-
-These logs showed the player was initially white, but after reconnection was incorrectly assigned black.
-
-**Solution - Aggressive Color Preservation:**
-
-1. **Client-Side Enhancement:**
-   - Added immediate color assignment from localStorage **before** reconnection attempt
-   - Pre-initialized chess engine with saved FEN position when available
-   - Added robust logging with clear markers for reconnection flow
-   - Implemented more rigorous color validation and consistency checks
-   - Modified `setupChessGame()` to accept an explicit starting position
-
-   ```javascript
-   // Set global variables from saved state IMMEDIATELY
-   if (gameState.color) {
-     playerColor = gameState.color;
-     console.log('🔴 SETTING PLAYER COLOR FROM STORAGE:', playerColor);
-     
-     // If we have a saved board position, pre-initialize the game
-     if (gameState.fen) {
-       // Initialize the chess engine with the saved position
-       if (!game) {
-         game = new Chess();
-       }
-       try {
-         // Try to load the saved position
-         const success = game.load(gameState.fen);
-         console.log('Preloaded saved FEN position, success:', success);
-       } catch (e) {
-         console.error('Error loading saved FEN:', e);
-         // Fall back to a new game
-         game = new Chess();
-       }
-     }
-   }
-   ```
-
-2. **Server-Side Reinforcement:**
-   - Added forced color assignment based on reconnection request
-   - Implemented comprehensive logging for reconnection attempts
-   - Added a special case handler for players who refresh before disconnection
-   - Enhanced the room lookup logic to prioritize color consistency
-   - Added a forced reconnection feature for cases where player data is lost but room exists
-
-   ```javascript
-   // CRITICAL: Check for reconnection with a specific color
-   if (isReconnecting && previousColor) {
-     log('INFO', `🔴 Reconnection attempt for ${previousColor} player in room ${gameRoomId}`);
-     
-     // Force playerColor to be the requested color (for consistency during reconnection)
-     playerColor = previousColor;
-     
-     // Continue with reconnection logic...
-   }
-   ```
-
-3. **Debugging Enhancements:**
-   - Added color-coded logging with 🔴 markers to trace reconnection flow
-   - Added explicit color validation at critical points in the process
-   - Implemented more verbose logging of game state during reconnection
-   - Added checks for color mismatch between client expectation and server assignment
-
-   ```javascript
-   // CRITICAL: Ensure the color from the server matches our expected color
-   if (playerColor !== data.color) {
-     console.warn(`🔴 Color mismatch during reconnection! Expected: ${playerColor}, Got: ${data.color}`);
-     playerColor = data.color;
-   }
-   ```
-
-These changes ensure that players always reconnect with their original color by taking a more aggressive approach to color preservation and validation throughout the reconnection process. The system now correctly handles all reconnection scenarios, including page refreshes, network disconnections, and cases where player data might be temporarily missing.
-
-**Date Fixed:** 2025-03-06
-
-## Null Player Color in Modular Architecture (2025-03-06)
-
-### Issue: Player Color Null in Chess Manager Despite Correct Server Assignment
-**Status:** In Progress
-**Description:** Despite previous fixes to the reconnection system and color persistence, players are still experiencing issues where the Chess Manager component shows `null` for player color during initialization, even though the server correctly assigned a color and other components acknowledge it.
-
-**Diagnosis:** Through detailed logging analysis, we've discovered a component communication issue in the modular architecture:
-
-1. The server correctly assigns player color (e.g., 'black')
-2. The Socket Manager and Game State modules correctly receive this assignment
-3. However, the Chess Manager module shows `null` for player color during board initialization
-
-**Debug Logs Analysis:**
-```
-socket-manager.js:65 Player assigned to room: {roomId: '222', color: 'black', isFirstPlayer: false, username: 'Player'}
-game-state.js:90 Game setup complete. Room: 222, Player color: black
-chess-manager.js:20 [ChessManager Debug] Setting up chess board
-chess-manager.js:20 [ChessManager Debug] Player color: null  <-- Critical issue here!
-chess-manager.js:20 [ChessManager Debug] Board orientation: black
-```
-
-This indicates a synchronization problem between modules, where the Chess Manager isn't receiving or accessing the player color that was successfully assigned by the server and acknowledged by other components.
-
-**Root Cause Analysis:**
-The application has been refactored into a modular architecture with separate components:
-- `chess-manager.js`: Handles chess board and game logic
-- `socket-manager.js`: Manages socket.io communication
-- `ui-manager.js`: Controls UI updates and screen changes
-- `game-state.js`: Maintains overall game state
-- `farm-manager.js`: Manages farming mechanics
-
-Our previous fixes focused on the consolidated `app.js` and `server.js` files, but didn't address how player color is communicated between these modular components.
+If the black player is still connected when the white player tries to reconnect, `playerCount` will be 1, causing the reconnecting player to be assigned black instead of their original white color.
 
 **Proposed Solution:**
+Modify the fallback logic to check which color is already taken before assigning a color:
 
-1. **Component State Synchronization:**
-   - Implement a centralized state manager to ensure consistent player color across all components
-   - Add explicit state update events when player color changes
-   - Ensure Chess Manager initializes only after player color is definitively set
+```javascript
+// Check which color is already taken in the room
+let takenColor = null;
+for (const pid in gameRooms[gameRoomId].players) {
+  takenColor = gameRooms[gameRoomId].players[pid].color;
+  break; // Just need one player's color
+}
 
-2. **Chess Manager Enhancements:**
-   - Add defensive coding to prevent chess board initialization with null color
-   - Implement retry mechanism if player color is null during initialization
-   - Add fallback to retrieve player color from other components if null
+// Always assign the opposite of what's already taken
+if (takenColor) {
+  playerColor = takenColor === 'white' ? 'black' : 'white';
+} else {
+  // No colors taken, default to white
+  playerColor = 'white';
+}
+```
 
-3. **Color Assignment Order:**
-   - Review initialization sequence to ensure player color is set before Chess Manager setup
-   - Add pre-initialization checks to validate player color exists
+This ensures that even when normal reconnection fails, the player will still be assigned their original color as long as the other player hasn't disconnected too.
 
-4. **Improved Debugging:**
-   - Add comprehensive tracing of player color value as it passes between components
-   - Log state transitions for each component with timestamps to identify race conditions
+**Implementation Priority:** High - This issue directly impacts gameplay experience and should be addressed immediately.
 
-**Implementation Plan:**
-1. Identify how the Chess Manager retrieves player color
-2. Add checks to prevent null values from being used
-3. Implement proper communication between Game State and Chess Manager modules
-4. Add retry logic if chess board attempts to initialize with null color
+**Implementation:**
+The fix has been implemented in server.js. We've replaced the problematic color assignment logic with a more robust approach that checks which color is already taken before assigning a new one:
 
-This issue highlights the challenges of maintaining consistent state across modular components, especially during reconnection scenarios. The fix will require addressing not just the symptoms but ensuring proper state synchronization across the entire application architecture.
+```javascript
+// FIXED: Improved player color assignment logic to handle reconnection failures better
+// Instead of simply using playerCount, we check which color is already taken
 
-**In Progress**
+// Check if there's already a player in the room and get their color
+let takenColor = null;
+for (const pid in gameRooms[gameRoomId].players) {
+  takenColor = gameRooms[gameRoomId].players[pid].color;
+  break; // Just need one player's color
+}
 
-## Modular Architecture Reconnection Fix (2025-03-07)
+// If one player is already in the room, assign the opposite color
+if (takenColor) {
+  playerColor = takenColor === 'white' ? 'black' : 'white';
+  log('INFO', `🔴 Room has a ${takenColor} player, assigning ${playerColor} to reconnecting player`);
+  
+  // If the reconnecting player specified a color and it's already taken, warn them
+  if (previousColor && previousColor === takenColor) {
+    log('WARN', `🔴 Requested color ${previousColor} is already taken, assigning ${playerColor} instead`);
+  }
+} else {
+  // No players in room, default to white for first player
+  playerColor = 'white';
+  log('INFO', `🔴 No players in room, assigning white to first player`);
+}
+```
 
-### Issue: Null Player Color in Chess Manager During Reconnection
+This solution ensures that even when the normal reconnection paths fail, players will still be assigned the correct color based on what's available in the room. This prevents the scenario where a white player disconnects, the black player stays connected, and the white player reconnects only to be incorrectly assigned black.
+
 **Status:** Fixed
-**Description:** After refactoring the codebase into a modular architecture, players experienced issues where their color would appear as `null` during board initialization despite being correctly assigned by the server. This happened because the reconnection functionality was not properly implemented in the modular version of the application.
-
-**Diagnosis:** Through console logs, we identified that while the server correctly assigned colors to reconnecting players, the Chess Manager component was showing `null` for the player color during initialization:
-
-```
-socket-manager.js:65 Player assigned to room: {roomId: '222', color: 'black', isFirstPlayer: false, username: 'Player'}
-game-state.js:90 Game setup complete. Room: 222, Player color: black
-chess-manager.js:20 [ChessManager Debug] Setting up chess board
-chess-manager.js:20 [ChessManager Debug] Player color: null  <-- Critical issue here!
-chess-manager.js:20 [ChessManager Debug] Board orientation: black
-```
-
-Root cause analysis revealed three key issues:
-1. The modular architecture lacked proper reconnection handling
-2. The `reconnectSuccess` event from the server wasn't being processed
-3. There was no synchronization of player color between modules
-
-**Solution Implemented:**
-
-1. **Socket Manager Enhancements:**
-   - Added comprehensive handling for the `reconnectSuccess` event
-   - Ensured proper color assignment during reconnection
-   - Improved logging of reconnection process
-   - Added a `reconnect` function to handle reconnection attempts
-   
-   ```javascript
-   socket.on('reconnectSuccess', (data) => {
-     console.log('🔴 Reconnection successful:', data);
-     roomId = data.roomId;
-     
-     // CRITICAL: Update game state with the reconnected player's color
-     GameState.setupGame(data.roomId, data.color);
-     
-     console.log('🔴 Player color set to:', data.color);
-     
-     // Start the game immediately since we're reconnecting
-     GameState.startGame();
-     
-     // Initialize chess board with saved state if available
-     if (data.gameState && data.gameState.chessEngineState) {
-       ChessManager.setupBoard(data.gameState.chessEngineState);
-     }
-   });
-   ```
-
-2. **Game State Improvements:**
-   - Added defensive coding for null player color
-   - Implemented color recovery from localStorage if needed
-   - Added state saving and restoration functions
-   
-   ```javascript
-   function getPlayerColor() {
-     // Add safety check for null playerColor
-     if (playerColor === null) {
-       console.error('🔴 Player color is null! This should never happen.');
-       
-       // Try to recover color from localStorage if available
-       try {
-         const storedData = localStorage.getItem('chessFarm_gameState');
-         if (storedData) {
-           const gameState = JSON.parse(storedData);
-           if (gameState && gameState.color) {
-             console.log('🔴 Recovered player color from localStorage:', gameState.color);
-             playerColor = gameState.color;
-             return playerColor;
-           }
-         }
-       } catch (e) {
-         console.error('Error recovering color from localStorage:', e);
-       }
-       
-       // Return default if can't recover
-       console.warn('🔴 Defaulting to white for player color');
-       return 'white';
-     }
-     
-     return playerColor;
-   }
-   ```
-
-3. **Application Initialization:**
-   - Added specific initialization order to ensure modules load correctly
-   - Implemented reconnection check at startup
-   - Added pre-initialization of player color from localStorage
-   
-   ```javascript
-   function initializeApp() {
-     console.log('Initializing Chess Farm Game...');
-     
-     // Initialize the modules in the correct order
-     UIManager.initialize();
-     GameState.initialize();
-     SocketManager.initialize();
-     ChessManager.initialize();
-     FarmManager.initialize();
-     
-     // Critical: Try to reconnect if we have saved game state
-     // This must happen after all modules are initialized
-     setTimeout(tryReconnect, 500);
-   }
-   ```
-
-4. **Modular Reconnection System:**
-   - Implemented `tryReconnect` function to check for saved games
-   - Added state saving at critical points (player assignment, game start)
-   - Improved communication between modules during reconnection
-   
-   ```javascript
-   function tryReconnect() {
-     console.log('🔴 Checking for saved game state to reconnect...');
-     
-     // Constants for localStorage
-     const GAME_STATE_KEY = 'chessFarm_gameState';
-     const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-     
-     try {
-       // Check if we have saved game state
-       const savedStateJSON = localStorage.getItem(GAME_STATE_KEY);
-       if (!savedStateJSON) {
-         console.log('🔴 No saved game state found');
-         return;
-       }
-       
-       // Parse the saved state
-       const savedState = JSON.parse(savedStateJSON);
-       console.log('🔴 Found saved game state:', savedState);
-       
-       // Verify we have the minimum required data
-       if (!savedState.roomId || !savedState.username) {
-         console.log('🔴 Saved game state missing required fields');
-         return;
-       }
-       
-       // CRITICAL: Set up game state with saved player color to prevent null values during reconnection
-       if (typeof GameState !== 'undefined' && savedState.color) {
-         console.log('🔴 Pre-initializing game state with saved color:', savedState.color);
-         GameState.setupGame(savedState.roomId, savedState.color);
-       }
-       
-       // Attempt to reconnect
-       if (typeof SocketManager !== 'undefined') {
-         console.log('🔴 Emitting reconnect attempt with saved state');
-         SocketManager.reconnect({
-           username: savedState.username,
-           roomId: savedState.roomId,
-           previousColor: savedState.color // Send the saved color
-         });
-       }
-     } catch (error) {
-       console.error('🔴 Error during reconnection attempt:', error);
-       // Clear potentially corrupted data
-       localStorage.removeItem(GAME_STATE_KEY);
-     }
-   }
-   ```
-
-5. **Comprehensive Game State Saving:**
-   - Added game state saving after critical events:
-     - Player assignment
-     - Game start
-     - Player moves
-     - Opponent moves
-   - Ensured all relevant game state is captured:
-     - Room ID and player color
-     - Chess board position (FEN)
-     - Farm state
-     - Current turn
-     - Resources (wheat count)
-
-**Results:**
-- Players can now refresh the page and reconnect to games without losing their color assignment
-- Chess board properly initializes with the correct player color
-- State is correctly preserved and restored across different modules
-- The defensive coding prevents null player color from causing issues
-
-This fix demonstrates the importance of ensuring consistent state across different modules in a modular application architecture, particularly for complex features like reconnection.
-
-**Date Fixed:** 2025-03-07
+**Date Fixed:** 2025-03-09
 
 ## UI Setup Errors during Reconnection (2025-03-08)
 

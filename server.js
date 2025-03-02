@@ -386,8 +386,31 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Determine player color (first player is white, second is black)
-      playerColor = gameRooms[gameRoomId].playerCount === 0 ? 'white' : 'black';
+      // FIXED: Improved player color assignment logic to handle reconnection failures better
+      // Instead of simply using playerCount, we check which color is already taken
+      
+      // Check if there's already a player in the room and get their color
+      let takenColor = null;
+      for (const pid in gameRooms[gameRoomId].players) {
+        takenColor = gameRooms[gameRoomId].players[pid].color;
+        break; // Just need one player's color
+      }
+      
+      // If one player is already in the room, assign the opposite color
+      if (takenColor) {
+        playerColor = takenColor === 'white' ? 'black' : 'white';
+        log('INFO', `🔴 Room has a ${takenColor} player, assigning ${playerColor} to reconnecting player`);
+        
+        // If the reconnecting player specified a color and it's already taken, warn them
+        if (previousColor && previousColor === takenColor) {
+          log('WARN', `🔴 Requested color ${previousColor} is already taken, assigning ${playerColor} instead`);
+        }
+      } else {
+        // No players in room, default to white for first player
+        playerColor = 'white';
+        log('INFO', `🔴 No players in room, assigning white to first player`);
+      }
+      
       const isFirstPlayer = playerColor === 'white';
       
       log('INFO', `🔴 Assigning player ${socket.id} to ${playerColor} in room ${gameRoomId}`);
