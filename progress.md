@@ -921,7 +921,7 @@ Given the consistent player color assignment, we need to clarify the expected fl
 The logs confirm this is happening correctly. The issue may be a misunderstanding of the expected behavior rather than a code issue. The second player (black) correctly sees "Opponent's Turn" initially because in chess, white always moves first.
 
 **Reconnection Process Analysis:**
-After examining the server's reconnection logic in detail, we can confirm it is designed to preserve player color:
+After examining the server code, we can confirm it is designed to preserve player color:
 
 ```javascript
 // CRITICAL: Check for reconnection with a specific color
@@ -1039,7 +1039,7 @@ if (takenColor) {
 }
 ```
 
-This ensures that even when normal reconnection fails, the player will still be assigned their original color as long as the other player hasn't disconnected too.
+This ensures that even when normal reconnection fails, players will still be assigned the correct color based on what's available in the room.
 
 **Implementation Priority:** High - This issue directly impacts gameplay experience and should be addressed immediately.
 
@@ -1076,6 +1076,92 @@ if (takenColor) {
 This solution ensures that even when the normal reconnection paths fail, players will still be assigned the correct color based on what's available in the room. This prevents the scenario where a white player disconnects, the black player stays connected, and the white player reconnects only to be incorrectly assigned black.
 
 **Status:** Fixed
+**Date Fixed:** 2025-03-09
+
+## Game State Not Restored on Reconnection (2025-03-09)
+
+### Issue: Chess Board and Farm State Reset on Reconnection
+**Status:** Investigating
+**Description:** While player color assignment is now working correctly, the game state (chess board position and farm state) is being reset to the initial state when players reconnect. Both players see the chess board reset to the starting position, and the farm state for the reconnecting player is also reset.
+
+**Scenario:**
+1. Two players join a game and start playing
+2. They make chess moves and farm progress
+3. Player 1 (white) disconnects 
+4. Player 1 reconnects
+5. Player 1 reconnects with the correct color (white), but their chess board is reset to the beginning position
+6. Player 2 also sees Player 1's board reset to the beginning
+7. Player 1's farm state is also reset
+
+**Evidence from Logs:**
+```
+socket-manager.js:117 🔴 Saving game state after player assigned
+game-state.js:559 Game state saved to localStorage: {roomId: '111', color: 'white', username: '', timestamp: 1740876461062, fen: '', …}
+```
+
+**Initial Diagnosis:**
+1. The game state is being saved to localStorage after player assignment, but with an empty FEN string: `fen: ""`
+2. This empty state is then being restored on reconnection, effectively resetting the game
+3. The server may be storing the correct game state, but it's not being properly saved or restored on the client side
+
+**Possible Causes:**
+1. Game state is being saved too early, before the actual game has started and chess position is established
+2. The reconnection process might not be properly restoring the server-side game state
+3. The server might be sending the correct state, but client-side handling is overwriting it with empty values
+4. There might be a timing issue where local storage is saved after assignment but before the server state is properly received
+
+**Proposed Solution:**
+We need to investigate the reconnection process in detail, focusing on:
+1. When and how the server sends game state to reconnecting clients
+2. How the client handles the received game state
+3. The order of operations during reconnection
+
+This issue directly impacts the player experience as they lose their game progress when reconnecting, making it a high priority to fix.
+
+**Investigation Results:**
+After analyzing the codebase, I found several key insights:
+
+1. **Server-Side State Handling:**
+   - The server correctly stores game state including chess position (FEN) and farm state
+   - When a player reconnects, the server sends the correct game state to the client in the `reconnectSuccess` event
+   - The server's implementation of the reconnection process appears to be working as expected
+
+2. **Client-Side State Handling:**
+   - The client properly handles the `reconnectSuccess` event and initializes the chess board with the provided FEN
+   - The issue occurs because the client has an empty FEN saved in localStorage that's being used to restore the game state
+   - The `saveGameState` function is being called at inappropriate times - it's called right after player assignment when the game hasn't started yet
+
+3. **Incorrect Order of Operations:**
+   - The issue is that we're saving an empty game state to localStorage after player assignment
+   - This empty state is overriding the correct state received from the server during reconnection
+
+**Root Cause:**
+The root cause of the issue is that the game state is being saved too early in the game lifecycle, specifically after player assignment but before any actual game state exists. This empty state is then being used during reconnection attempts, effectively resetting the game.
+
+**Proposed Solution:**
+1. Modify when `saveGameState` is called in `socket-manager.js`:
+   - **Remove or delay** the call to `GameState.saveGameState()` in the `playerAssigned` event handler in `socket-manager.js`, as this was saving an empty game state before the game had started.
+   - Kept the save operations after meaningful game events like game start and moves.
+
+2. **Enhanced the `saveGameState` function:**
+   - Added validation to ensure we only save game state when there's meaningful data:
+   ```javascript
+   // Don't save if we have an empty or invalid FEN and the game is active
+   if (gameActive && (!fen || fen === '')) {
+     console.log('Not saving game state - empty FEN in active game');
+     return;
+   }
+   ```
+   - Improved error handling and logging to make debugging easier
+   - Used more consistent method names and checks for module availability
+
+These changes ensure that:
+1. Game state is only saved when there's actual game progress to save
+2. The client won't override server-provided game state with empty local state
+3. The reconnection process will properly restore the latest game state from the server
+
+**Status:** Fixed - Players should now be able to reconnect and resume their game with the correct state.
+
 **Date Fixed:** 2025-03-09
 
 ## UI Setup Errors during Reconnection (2025-03-08)

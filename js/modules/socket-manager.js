@@ -112,12 +112,6 @@ const SocketManager = (function() {
       GameState.setupGame(data.roomId, data.color);
       UIManager.setupGameUI(data.roomId, data.color);
       
-      // Save the game state for potential reconnection
-      if (typeof GameState.saveGameState === 'function') {
-        console.log('🔴 Saving game state after player assigned');
-        GameState.saveGameState();
-      }
-      
       // Keep showing the waiting screen
       UIManager.showScreen('waiting-screen');
       

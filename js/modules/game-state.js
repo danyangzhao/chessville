@@ -517,30 +517,32 @@ const GameState = (function() {
    * Save game state to localStorage for potential reconnection
    */
   function saveGameState() {
-    // Don't save if we don't have a room ID and player color
-    if (!roomId || !playerColor) {
-      console.warn('Cannot save game state without room ID and player color');
-      return;
-    }
-    
     try {
-      // Get FEN from ChessManager if available
-      let fen = '';
-      if (typeof ChessManager !== 'undefined' && typeof ChessManager.getFEN === 'function') {
-        fen = ChessManager.getFEN();
+      // Only save if we have the minimum required data
+      if (!roomId || !playerColor) {
+        console.log('Not saving game state - missing roomId or playerColor');
+        return;
       }
       
-      // Get farm state from FarmManager if available
+      // Get current game state
+      const fen = typeof ChessManager !== 'undefined' ? ChessManager.getCurrentFEN() : '';
+      
+      // Don't save if we have an empty or invalid FEN and the game is active
+      if (gameActive && (!fen || fen === '')) {
+        console.log('Not saving game state - empty FEN in active game');
+        return;
+      }
+      
+      // Get farm state if available
       let farmState = null;
-      if (typeof FarmManager !== 'undefined' && typeof FarmManager.getFarmState === 'function') {
-        farmState = FarmManager.getFarmState();
+      if (typeof FarmManager !== 'undefined' && typeof FarmManager.getState === 'function') {
+        farmState = FarmManager.getState();
       }
       
-      // Get username from UIManager if available
-      let username = '';
-      if (typeof UIManager !== 'undefined' && typeof UIManager.getUsername === 'function') {
-        username = UIManager.getUsername();
-      }
+      // Get username from UI if available
+      const username = typeof UIManager !== 'undefined' && typeof UIManager.getUsername === 'function' 
+        ? UIManager.getUsername() 
+        : '';
       
       // Create game state object
       const gameState = {
