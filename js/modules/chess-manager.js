@@ -133,44 +133,8 @@ const ChessManager = (function() {
    * @returns {boolean} True if the drag is allowed, false otherwise
    */
   function onDragStart(source, piece, position, orientation) {
-    debugLog('Drag started:', { source, piece, orientation });
-    
-    // Don't allow drag if it's not the player's turn or not in chess phase
-    if (!GameState.isPlayerTurn()) {
-      debugLog('Not your turn, preventing drag');
-      return false;
-    }
-    
-    if (GameState.getCurrentGamePhase() !== 'chess') {
-      debugLog('Not in chess phase, preventing drag');
-      showMessage('You can only move pieces during the chess phase');
-      return false;
-    }
-    
-    // Determine player's pieces based on color
-    const playerColor = GameState.getPlayerColor();
-    const pieceColor = piece.charAt(0);
-    const playerPiecePrefix = playerColor === 'white' ? 'w' : 'b';
-    
-    // Only allow dragging player's own pieces
-    if (pieceColor !== playerPiecePrefix) {
-      debugLog(`Attempted to drag opponent's piece (${piece}), preventing drag`);
-      return false;
-    }
-    
-    // Check if it's the player's turn according to chess engine
-    const engineTurn = chessEngine.turn();
-    const playerTurn = playerColor === 'white' ? 'w' : 'b';
-    
-    if (engineTurn !== playerTurn) {
-      debugLog(`Chess engine says it's ${engineTurn}'s turn, but player is ${playerTurn}`);
-      return false;
-    }
-    
-    // Highlight legal moves when a piece is dragged
-    selectSquare(source);
-    
-    return true;
+    // This function is no longer used as we're switching to click-only mode
+    return false;
   }
   
   /**
@@ -184,28 +148,8 @@ const ChessManager = (function() {
    * @returns {string} 'snapback' to cancel the move, or undefined to allow it
    */
   function onDrop(source, target, piece, newPosition, oldPosition, orientation) {
-    debugLog('Piece dropped:', { source, target, piece });
-    
-    // Clear highlights
-    clearSelection();
-    
-    // Check if source and target are the same (pick up and put down)
-    if (source === target) {
-      debugLog('Piece dropped on same square, snapback');
-      return 'snapback';
-    }
-    
-    // Try to make the move
-    const moveResult = tryMovePiece(source, target);
-    
-    // If move failed, snap the piece back
-    if (!moveResult) {
-      debugLog('Move rejected, snapback');
-      return 'snapback';
-    }
-    
-    // Return undefined (the move is allowed)
-    return undefined;
+    // This function is no longer used as we're switching to click-only mode
+    return 'snapback';
   }
   
   /**
@@ -333,7 +277,8 @@ const ChessManager = (function() {
       
       // Get player color directly from GameState
       const playerColor = GameState.getPlayerColor();
-      const orientation = playerColor === 'white' ? 'white' : 'black';
+      // MODIFIED: Set orientation to always have player's pieces at the bottom of the board
+      const orientation = playerColor;
       
       debugLog(`Player color: ${playerColor}`);
       debugLog(`Board orientation: ${orientation}`);
@@ -345,11 +290,9 @@ const ChessManager = (function() {
       
       // Create board configuration
       const config = {
-        draggable: true,
+        draggable: false, // MODIFIED: Disable dragging
         position: chessEngine.fen(),
-        onDragStart: onDragStart,
-        onDrop: onDrop,
-        onSnapEnd: onSnapEnd,
+        orientation: orientation, // MODIFIED: Set orientation based on player color
         pieceTheme: '/img/chesspieces/wikipedia/{piece}.png'
       };
       
@@ -732,10 +675,7 @@ const ChessManager = (function() {
    * Handle the end of a piece move
    */
   function onSnapEnd() {
-    // Update the board position
-    if (chessboard) {
-      chessboard.position(chessEngine.fen());
-    }
+    // This function is no longer used as we're switching to click-only mode
   }
   
   /**
@@ -1037,7 +977,8 @@ const ChessManager = (function() {
    * @param {HTMLElement} boardElement - The board container element 
    */
   function rotatePiecesForBlackPlayer(boardElement) {
-    debugLog('Piece rotation disabled - using standard orientation');
+    // This function is no longer needed since we're setting the board orientation directly
+    debugLog('Board orientation is now handled directly through the board configuration');
   }
   
   /**
