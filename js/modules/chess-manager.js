@@ -136,31 +136,44 @@ const ChessManager = (function() {
             }
           }
           
-          const savedState = localStorage.getItem('chessFarm_gameState');
-          if (savedState) {
-            const gameState = JSON.parse(savedState);
-            
-            // Check if saved state is recent enough (within 5 minutes)
-            const now = Date.now();
-            const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
-            
-            // ENHANCED: Better validation of saved state
-            if (gameState.fen && gameState.timestamp && 
-                (now - gameState.timestamp <= reconnectTimeout) &&
-                (currentRoomId === null || gameState.roomId === currentRoomId)) {
-              debugLog('Found valid saved game state in localStorage, using saved FEN:', gameState.fen);
-              savedFEN = gameState.fen;
-            } else {
-              debugLog('Found saved game state but it is invalid or for a different room', {
-                currentRoomId,
-                savedRoomId: gameState.roomId,
-                timeDifference: now - gameState.timestamp
-              });
+          // During reconnection, try to get the saved FEN from GameState directly
+          // This is often more up-to-date than what's in localStorage
+          const gameStateData = GameState.getSavedStateForReconnection && 
+                                GameState.getSavedStateForReconnection();
+          
+          if (gameStateData && gameStateData.fen) {
+            debugLog('Found FEN in GameState for reconnection:', gameStateData.fen);
+            savedFEN = gameStateData.fen;
+          } else {
+            // Fall back to localStorage
+            const savedState = localStorage.getItem('chessFarm_gameState');
+            if (savedState) {
+              const gameState = JSON.parse(savedState);
+              
+              // Check if saved state is recent enough (within 5 minutes)
+              const now = Date.now();
+              const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
+              
+              // ENHANCED: Better validation of saved state
+              if (gameState.fen && gameState.timestamp && 
+                  (now - gameState.timestamp <= reconnectTimeout) &&
+                  (currentRoomId === null || gameState.roomId === currentRoomId)) {
+                debugLog('Found valid saved game state in localStorage, using saved FEN:', gameState.fen);
+                savedFEN = gameState.fen;
+              } else {
+                debugLog('Found saved game state but it is invalid or for a different room', {
+                  currentRoomId,
+                  savedRoomId: gameState.roomId,
+                  timeDifference: now - gameState.timestamp
+                });
+              }
             }
           }
         } catch (e) {
-          console.error('Error checking localStorage for saved game state:', e);
+          console.error('Error checking for saved game state:', e);
         }
+      } else {
+        debugLog('Using provided FEN position:', savedFEN);
       }
       
       // Ensure chess engine is initialized properly
@@ -173,12 +186,20 @@ const ChessManager = (function() {
       if (savedFEN) {
         try {
           debugLog('Attempting to load saved FEN position:', savedFEN);
-          const loadSuccess = chessEngine.load(savedFEN);
-          if (!loadSuccess) {
-            console.error('Failed to load saved FEN position, resetting to starting position');
-            chessEngine.reset();
+          // Validate FEN before loading
+          const isValidFEN = validateFEN(savedFEN);
+          
+          if (isValidFEN) {
+            const loadSuccess = chessEngine.load(savedFEN);
+            if (!loadSuccess) {
+              console.error('Failed to load saved FEN position, resetting to starting position');
+              chessEngine.reset();
+            } else {
+              debugLog('Successfully loaded saved FEN position');
+            }
           } else {
-            debugLog('Successfully loaded saved FEN position');
+            console.error('Invalid FEN format, resetting to starting position');
+            chessEngine.reset();
           }
         } catch (e) {
           console.error('Error loading saved FEN position:', e);
@@ -227,6 +248,26 @@ const ChessManager = (function() {
       debugLog('Chess board setup complete');
     } catch (error) {
       console.error('Error setting up chess board:', error);
+    }
+  }
+  
+  /**
+   * Validate FEN string
+   * @param {string} fen - The FEN string to validate
+   * @returns {boolean} True if the FEN string is valid
+   */
+  function validateFEN(fen) {
+    if (!fen || typeof fen !== 'string') {
+      return false;
+    }
+    
+    try {
+      // Create a temporary chess engine to validate FEN
+      const tempEngine = new Chess();
+      return tempEngine.load(fen);
+    } catch (e) {
+      console.error('FEN validation error:', e);
+      return false;
     }
   }
   

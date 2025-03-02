@@ -655,6 +655,57 @@ const GameState = (function() {
     return gameActive;
   }
   
+  /**
+   * Get saved game state for reconnection
+   * This provides more direct access to the saved game state for reconnection purposes
+   * @returns {Object|null} The saved game state object or null if not available
+   */
+  function getSavedStateForReconnection() {
+    try {
+      // Check if we have a saved game state in localStorage
+      const storedData = localStorage.getItem('chessFarm_gameState');
+      if (!storedData) {
+        console.log('No saved game state found in localStorage');
+        return null;
+      }
+      
+      const gameState = JSON.parse(storedData);
+      
+      // Check if the saved state is valid and recent enough
+      const now = Date.now();
+      const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
+      
+      // Validate the saved state
+      if (!gameState.roomId || !gameState.timestamp || !gameState.color) {
+        console.warn('Saved game state is missing critical fields');
+        return null;
+      }
+      
+      // Check if it's recent enough
+      if (now - gameState.timestamp > reconnectTimeout) {
+        console.warn('Saved game state is too old for reconnection');
+        return null;
+      }
+      
+      // Check if it matches current room (if room is already set)
+      if (roomId && gameState.roomId !== roomId) {
+        console.warn('Saved game state is for a different room');
+        return null;
+      }
+      
+      console.log('Valid saved game state found for reconnection:', {
+        roomId: gameState.roomId,
+        color: gameState.color,
+        timeSinceUpdate: now - gameState.timestamp
+      });
+      
+      return gameState;
+    } catch (e) {
+      console.error('Error retrieving saved game state:', e);
+      return null;
+    }
+  }
+  
   // Public API
   return {
     initialize,
@@ -687,6 +738,7 @@ const GameState = (function() {
     setOpponentConnected,
     isOpponentConnected,
     isActive,
-    updateFromServer
+    updateFromServer,
+    getSavedStateForReconnection
   };
 })(); 

@@ -1328,6 +1328,67 @@ const FarmManager = (function() {
     return justHarvestedPlotsCount > 0;
   }
   
+  /**
+   * Restore farm state from saved data during reconnection
+   * @param {Object} farmState - The farm state object containing plot information
+   */
+  function restoreFarmState(farmState) {
+    try {
+      if (!farmState) {
+        console.error('Cannot restore farm state: No farm state provided');
+        return;
+      }
+
+      console.log('🔄 Restoring farm state:', farmState);
+
+      // Check if we have wheat counts to restore
+      if (typeof farmState.whiteWheat === 'number' && typeof GameState !== 'undefined') {
+        GameState.updateWheat('white', farmState.whiteWheat);
+        console.log('🔄 Restored white wheat count:', farmState.whiteWheat);
+      }
+
+      if (typeof farmState.blackWheat === 'number' && typeof GameState !== 'undefined') {
+        GameState.updateWheat('black', farmState.blackWheat);
+        console.log('🔄 Restored black wheat count:', farmState.blackWheat);
+      }
+
+      // Check if we have plot data to restore
+      if (Array.isArray(farmState.whitePlots)) {
+        // Clear existing white plots and replace with saved ones
+        farms.white.plots = farmState.whitePlots.map((plot, index) => ({
+          ...plot,
+          id: plot.id || `white-plot-${index}`,
+          // Ensure the plot has all the required properties
+          state: plot.state || PLOT_STATE.EMPTY,
+          turnsToHarvest: plot.turnsToHarvest || null,
+          crop: plot.crop || null,
+          canPlantAfterHarvest: plot.canPlantAfterHarvest || false
+        }));
+        console.log('🔄 Restored white plots:', farms.white.plots);
+      }
+
+      if (Array.isArray(farmState.blackPlots)) {
+        // Clear existing black plots and replace with saved ones
+        farms.black.plots = farmState.blackPlots.map((plot, index) => ({
+          ...plot,
+          id: plot.id || `black-plot-${index}`,
+          // Ensure the plot has all the required properties
+          state: plot.state || PLOT_STATE.EMPTY,
+          turnsToHarvest: plot.turnsToHarvest || null,
+          crop: plot.crop || null,
+          canPlantAfterHarvest: plot.canPlantAfterHarvest || false
+        }));
+        console.log('🔄 Restored black plots:', farms.black.plots);
+      }
+
+      // Update the farm display to reflect the restored state
+      updateFarmDisplay();
+      console.log('🔄 Farm display updated with restored state');
+    } catch (error) {
+      console.error('Error restoring farm state:', error);
+    }
+  }
+  
   // Public API
   return {
     initialize: initialize,
@@ -1350,6 +1411,7 @@ const FarmManager = (function() {
     standardizeCropData: standardizeCropData,
     prepareCropForPlanting: prepareCropForPlanting,
     areAllUnlockedPlotsFull: areAllUnlockedPlotsFull,
-    hasJustHarvestedPlots: hasJustHarvestedPlots
+    hasJustHarvestedPlots: hasJustHarvestedPlots,
+    restoreFarmState: restoreFarmState
   };
 })(); 

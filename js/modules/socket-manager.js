@@ -166,7 +166,10 @@ const SocketManager = (function() {
       // Update farm state if provided
       if (data.farmState) {
         if (typeof FarmManager !== 'undefined' && typeof FarmManager.restoreFarmState === 'function') {
+          console.log('🔴 Restoring farm state during reconnection');
           FarmManager.restoreFarmState(data.farmState);
+        } else {
+          console.error('🔴 FarmManager.restoreFarmState is not available!');
         }
       }
       
@@ -186,6 +189,7 @@ const SocketManager = (function() {
       
       // Get the FEN position to restore - prioritize server data but fall back to localStorage
       let fenPosition = null;
+      let fenSource = "none";
       
       // ENHANCED: Improved FEN position recovery with better fallback logic and error handling
       
@@ -193,11 +197,13 @@ const SocketManager = (function() {
       if (data.gameState && data.gameState.chessEngineState) {
         console.log('🔴 Using server-provided FEN position for reconnection');
         fenPosition = data.gameState.chessEngineState;
+        fenSource = "server";
       } 
       // If no server FEN, check data.savedFEN (passed from our reconnect function)
       else if (data.savedFEN) {
         console.log('🔴 Using client-saved FEN position for reconnection:', data.savedFEN);
         fenPosition = data.savedFEN;
+        fenSource = "client";
       }
       // Lastly, try localStorage directly as a fallback
       else {
@@ -208,6 +214,7 @@ const SocketManager = (function() {
             if (gameState.fen && gameState.roomId === data.roomId) {
               console.log('🔴 Using localStorage FEN position for reconnection:', gameState.fen);
               fenPosition = gameState.fen;
+              fenSource = "localStorage";
             }
           }
         } catch (e) {
@@ -215,15 +222,19 @@ const SocketManager = (function() {
         }
       }
       
+      console.log(`🔴 FEN position for reconnection (source: ${fenSource}):`, fenPosition);
+      
       // CRITICAL: Wait until UI is completely updated before initializing chess board
       // This ensures all prerequisites are in place before the board is set up
       setTimeout(() => {
         // Initialize chess board with the appropriate FEN position
-        if (typeof ChessManager !== 'undefined') {
+        if (typeof ChessManager !== 'undefined' && typeof ChessManager.setupBoard === 'function') {
           if (fenPosition) {
             console.log('🔴 Setting up chess board with saved position:', fenPosition);
-            // Use a short delay to ensure the game container is fully rendered
             ChessManager.setupBoard(fenPosition);
+            
+            // Save game state to localStorage for persistence
+            GameState.saveGameState();
           } else {
             console.log('🔴 No saved position found, setting up new chess board');
             ChessManager.setupBoard();
@@ -231,11 +242,15 @@ const SocketManager = (function() {
           
           // Make sure the board reflects the current game state
           setTimeout(() => {
-            ChessManager.refreshBoard();
-            console.log('🔴 Chess board refreshed after reconnection');
-          }, 300);
+            if (typeof ChessManager.refreshBoard === 'function') {
+              ChessManager.refreshBoard();
+              console.log('🔴 Chess board refreshed after reconnection');
+            }
+          }, 500); // Increased delay to ensure UI is ready
+        } else {
+          console.error('🔴 ChessManager.setupBoard is not available!');
         }
-      }, 200);
+      }, 300); // Increased delay for more reliability
     });
     
     socket.on('roomFull', (data) => {
