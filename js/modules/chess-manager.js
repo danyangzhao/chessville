@@ -102,6 +102,113 @@ const ChessManager = (function() {
   }
   
   /**
+   * Display a message to the user
+   * @param {string} message - The message to display
+   * @param {string} [type] - Optional message type (success, error, etc.)
+   * @param {number} [duration] - Duration in milliseconds to show the message
+   */
+  function showMessage(message, type = '', duration = 3000) {
+    debugLog('Showing message:', message, type);
+    
+    // Try to use UIManager if available
+    if (typeof UIManager !== 'undefined' && typeof UIManager.showMessage === 'function') {
+      return UIManager.showMessage(message, type, duration);
+    }
+    
+    // Fallback to using global showMessage function if available
+    if (typeof window.showMessage === 'function') {
+      return window.showMessage(message, duration);
+    }
+    
+    // Last resort - just log to console
+    console.log('Message:', message);
+  }
+  
+  /**
+   * Called when a piece drag is started
+   * @param {string} source - The source square
+   * @param {Object} piece - The piece object
+   * @param {Object} position - The current board position
+   * @param {string} orientation - The board orientation
+   * @returns {boolean} True if the drag is allowed, false otherwise
+   */
+  function onDragStart(source, piece, position, orientation) {
+    debugLog('Drag started:', { source, piece, orientation });
+    
+    // Don't allow drag if it's not the player's turn or not in chess phase
+    if (!GameState.isPlayerTurn()) {
+      debugLog('Not your turn, preventing drag');
+      return false;
+    }
+    
+    if (GameState.getCurrentGamePhase() !== 'chess') {
+      debugLog('Not in chess phase, preventing drag');
+      showMessage('You can only move pieces during the chess phase');
+      return false;
+    }
+    
+    // Determine player's pieces based on color
+    const playerColor = GameState.getPlayerColor();
+    const pieceColor = piece.charAt(0);
+    const playerPiecePrefix = playerColor === 'white' ? 'w' : 'b';
+    
+    // Only allow dragging player's own pieces
+    if (pieceColor !== playerPiecePrefix) {
+      debugLog(`Attempted to drag opponent's piece (${piece}), preventing drag`);
+      return false;
+    }
+    
+    // Check if it's the player's turn according to chess engine
+    const engineTurn = chessEngine.turn();
+    const playerTurn = playerColor === 'white' ? 'w' : 'b';
+    
+    if (engineTurn !== playerTurn) {
+      debugLog(`Chess engine says it's ${engineTurn}'s turn, but player is ${playerTurn}`);
+      return false;
+    }
+    
+    // Highlight legal moves when a piece is dragged
+    selectSquare(source);
+    
+    return true;
+  }
+  
+  /**
+   * Called when a piece is dropped on a square
+   * @param {string} source - The source square
+   * @param {string} target - The target square
+   * @param {Object} piece - The piece object
+   * @param {Object} newPosition - The new board position
+   * @param {Object} oldPosition - The old board position
+   * @param {string} orientation - The board orientation
+   * @returns {string} 'snapback' to cancel the move, or undefined to allow it
+   */
+  function onDrop(source, target, piece, newPosition, oldPosition, orientation) {
+    debugLog('Piece dropped:', { source, target, piece });
+    
+    // Clear highlights
+    clearSelection();
+    
+    // Check if source and target are the same (pick up and put down)
+    if (source === target) {
+      debugLog('Piece dropped on same square, snapback');
+      return 'snapback';
+    }
+    
+    // Try to make the move
+    const moveResult = tryMovePiece(source, target);
+    
+    // If move failed, snap the piece back
+    if (!moveResult) {
+      debugLog('Move rejected, snapback');
+      return 'snapback';
+    }
+    
+    // Return undefined (the move is allowed)
+    return undefined;
+  }
+  
+  /**
    * Set up the chess board
    * @param {string} [savedFEN] - Optional saved FEN string to restore board position
    */
