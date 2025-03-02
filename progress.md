@@ -1775,3 +1775,123 @@ This implementation ensures that if a player accidentally refreshes their browse
 2. Add an automatic reconnection attempt if the websocket connection drops but the page is still open
 3. Implement a forfeit system if a player doesn't reconnect within the timeout period
 4. Add an option for the remaining player to claim victory if their opponent disconnects for too long
+
+## Enhanced Reconnection System: Full Game State Preservation (2025-03-04)
+
+### Issue: Game State Reset After Reconnection
+**Status:** Fixed
+**Description:** While the basic reconnection framework was implemented, when a player refreshed the page or reconnected, the chess board was reset to the starting position and the farm state was lost. This affected both the reconnecting player and their opponent.
+
+**Diagnosis:** The initial reconnection system only preserved the room connection information but not the actual game state. The server was not storing the complete chess position and farm state, and the reconnection process wasn't properly restoring these elements.
+
+**Solution:** Enhanced the reconnection system to preserve and restore the complete game state:
+
+1. **Improved Server-Side Storage:**
+   - Expanded the game room data structure to store comprehensive game state
+   - Added farm state and wheat counts to the game state object
+   - Created a new `farm-update` socket event to sync farm state changes
+   - Enhanced the disconnect handler to store a complete snapshot of player state
+
+```javascript
+// Improved game room structure
+gameRooms[gameRoomId] = {
+  // ... existing properties ...
+  gameState: {
+    chessEngineState: new Chess().fen(),
+    isGameOver: false,
+    winner: null,
+    farmState: {}, // Store farm state for each player
+    wheatCounts: {} // Store wheat counts for each player
+  },
+  // ... other properties ...
+};
+
+// New farm-update event handler
+socket.on('farm-update', (data) => {
+  try {
+    const { roomId, farmState, wheatCount } = data;
+    
+    // Validate and get player
+    // ...
+    
+    // Store the farm state and wheat count for this player
+    player.farmState = farmState;
+    player.wheatCount = wheatCount;
+    
+    // Also store in the gameState for persistence
+    gameRooms[roomId].gameState.farmState[player.color] = farmState;
+    gameRooms[roomId].gameState.wheatCounts[player.color] = wheatCount;
+  } catch (error) {
+    // Error handling
+  }
+});
+```
+
+2. **Enhanced Client-Side Reconnection:**
+   - Added functions to capture and restore farm plot states
+   - Improved chess board position restoration
+   - Created a tracking system for wheat counts
+   - Implemented syncing of all game state changes to the server
+
+```javascript
+// Restore farm state from saved data
+function restoreFarmState(farmState) {
+  try {
+    if (!farmState || !Array.isArray(farmState)) return;
+    
+    const farmPlots = document.querySelectorAll('.farm-plot');
+    
+    // Go through each plot and update its state
+    farmState.forEach((plot, index) => {
+      if (index >= farmPlots.length) return;
+      
+      const plotElement = farmPlots[index];
+      
+      // Reset classes first
+      plotElement.classList.remove('growing', 'ready', 'locked');
+      
+      // Apply the correct state
+      if (plot.locked) {
+        plotElement.classList.add('locked');
+      } else if (plot.growing) {
+        plotElement.classList.add('growing');
+      } else if (plot.ready) {
+        plotElement.classList.add('ready');
+      }
+      
+      // Update text content
+      // ...
+    });
+  } catch (error) {
+    console.error('Error restoring farm state:', error);
+  }
+}
+
+// Send updated farm state to server
+function sendFarmUpdate() {
+  if (!socket || !roomId) return;
+  
+  const farmState = getCurrentFarmState();
+  
+  socket.emit('farm-update', {
+    roomId: roomId,
+    farmState: farmState,
+    wheatCount: wheatCount
+  });
+}
+```
+
+3. **Synchronization Improvements:**
+   - Added automatic farm state updates after every significant game action
+   - Implemented wheat count synchronization between client and server
+   - Enhanced the reconnection success handler to properly restore all game elements
+
+These changes ensure that players can refresh the page or reconnect after disconnection without losing any game progress. The complete game state, including chess board position, farm plots, and wheat count, is now properly preserved and restored during the reconnection process.
+
+**Date Fixed:** 2025-03-04
+
+## Next Steps
+1. Add periodic state syncing to handle cases where update events might be missed
+2. Improve error handling for edge cases during reconnection
+3. Add a visual indicator showing the reconnection status and progress
+4. Implement a forfeit option for cases where reconnection isn't desired

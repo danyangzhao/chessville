@@ -84,6 +84,106 @@ function tryReconnect() {
   }
 }
 
+// Handle successful reconnection to a game
+function handleReconnectSuccess(data) {
+  console.log('Successfully reconnected to game:', data);
+  
+  // Set or restore game state
+  roomId = data.roomId;
+  playerColor = data.color;
+  currentTurn = data.currentTurn;
+  
+  // Restore farm state and wheat count if provided
+  if (data.wheatCount !== undefined) {
+    wheatCount = data.wheatCount;
+    updateWheatDisplay();
+  }
+  
+  if (data.farmState) {
+    // Restore farm plots state
+    restoreFarmState(data.farmState);
+  }
+  
+  // Update saved state timestamp
+  saveGameState();
+  
+  // Update UI
+  document.getElementById('room-id-display').textContent = roomId;
+  document.getElementById('player-color').textContent = playerColor;
+  
+  // Show game screen
+  showScreen('game');
+  
+  // Setup chess board if not already set up
+  if (!board || !game) {
+    setupChessGame();
+  }
+  
+  // Update board with current game state
+  if (data.gameState && data.gameState.chessEngineState) {
+    game.load(data.gameState.chessEngineState);
+    board.position(game.fen());
+    board.orientation(playerColor);
+  }
+  
+  // Update UI based on current turn
+  updateTurnIndicator();
+  setupGameUI();
+  
+  showMessage('Successfully reconnected to your game!', 'success');
+  
+  // If it's your turn, highlight that
+  if (currentTurn === playerColor) {
+    showMessage("It's your turn!", 'info');
+  }
+}
+
+// Restore farm state from saved data
+function restoreFarmState(farmState) {
+  try {
+    if (!farmState || !Array.isArray(farmState)) return;
+    
+    const farmPlots = document.querySelectorAll('.farm-plot');
+    
+    // Go through each plot and update its state
+    farmState.forEach((plot, index) => {
+      if (index >= farmPlots.length) return; // Skip if we have more data than plots
+      
+      const plotElement = farmPlots[index];
+      
+      // Reset classes first
+      plotElement.classList.remove('growing', 'ready', 'locked');
+      
+      // Apply the correct state
+      if (plot.locked) {
+        plotElement.classList.add('locked');
+      } else if (plot.growing) {
+        plotElement.classList.add('growing');
+      } else if (plot.ready) {
+        plotElement.classList.add('ready');
+      }
+      
+      // Update text content
+      const plotText = plotElement.querySelector('.farm-plot-text');
+      if (plotText) {
+        if (plot.locked) {
+          plotText.textContent = `Locked\nNeed ${index + 1} captures`;
+        } else if (plot.growing) {
+          plotText.textContent = 'Growing';
+        } else if (plot.ready) {
+          plotText.textContent = 'Harvest';
+        } else {
+          plotText.textContent = 'Plant';
+        }
+      }
+    });
+    
+    console.log('Farm state restored');
+  } catch (error) {
+    console.error('Error restoring farm state:', error);
+  }
+}
+
 // Save current game state to localStorage for potential reconnection
 function saveGameState() {
   if (!roomId || !playerColor) return;
@@ -96,6 +196,7 @@ function saveGameState() {
   };
   
   localStorage.setItem(STORAGE_KEYS.GAME_STATE, JSON.stringify(gameState));
+  console.log('Game state saved for potential reconnection');
 }
 
 // Clear saved game state
@@ -147,44 +248,6 @@ function setupSocketListeners() {
       checkGameStatus();
     }
   });
-}
-
-// Handle successful reconnection to a game
-function handleReconnectSuccess(data) {
-  console.log('Successfully reconnected to game:', data);
-  
-  // Set or restore game state
-  roomId = data.roomId;
-  playerColor = data.color;
-  currentTurn = data.currentTurn;
-  
-  // Update saved state timestamp
-  saveGameState();
-  
-  // Update UI
-  document.getElementById('room-id-display').textContent = roomId;
-  document.getElementById('player-color').textContent = playerColor;
-  
-  // Show game screen
-  showScreen('game');
-  
-  // Setup chess board if not already set up
-  if (!board || !game) {
-    setupChessGame();
-  } else {
-    // Update board with current game state
-    if (data.gameState && data.gameState.chessEngineState) {
-      game.load(data.gameState.chessEngineState);
-      board.position(game.fen());
-      board.orientation(playerColor);
-    }
-  }
-  
-  // Update UI based on current turn
-  updateTurnIndicator();
-  setupGameUI();
-  
-  showMessage('Successfully reconnected to your game!', 'success');
 }
 
 // Handle opponent reconnected event
@@ -384,6 +447,9 @@ function onDrop(source, target) {
   currentTurn = (playerColor === 'white') ? 'black' : 'white';
   updateTurnIndicator();
   
+  // Also send farm state update since wheat count changed
+  sendFarmUpdate();
+  
   playMoveSound();
   checkGameStatus();
 }
@@ -574,6 +640,9 @@ function handleFarmPlotClick(plotIndex) {
     plotText.textContent = 'Plant';
     
     showMessage('Harvested 10 wheat!', 'success');
+    
+    // Update farm state on server
+    sendFarmUpdate();
   } else if (plot.classList.contains('growing')) {
     showMessage('This plot is still growing. Wait for it to be ready to harvest.', 'info');
   } else {
@@ -592,9 +661,15 @@ function handleFarmPlotClick(plotIndex) {
         plot.classList.add('ready');
         plotText.textContent = 'Harvest';
         showMessage('A plot is ready to harvest!', 'success');
+        
+        // Update farm state on server
+        sendFarmUpdate();
       }, 5000); // Just for demo purposes
       
       showMessage('Planted seeds for 5 wheat.', 'info');
+      
+      // Update farm state on server
+      sendFarmUpdate();
     } else {
       showMessage('Not enough wheat to plant. You need 5 wheat.', 'error');
     }
@@ -659,4 +734,37 @@ function joinGame() {
     roomId: roomIdInput,
     isReconnecting: false
   });
+}
+
+// Get current farm state data
+function getCurrentFarmState() {
+  const farmState = [];
+  const farmPlots = document.querySelectorAll('.farm-plot');
+  
+  farmPlots.forEach(plot => {
+    const plotState = {
+      locked: plot.classList.contains('locked'),
+      growing: plot.classList.contains('growing'),
+      ready: plot.classList.contains('ready')
+    };
+    
+    farmState.push(plotState);
+  });
+  
+  return farmState;
+}
+
+// Send updated farm state to server
+function sendFarmUpdate() {
+  if (!socket || !roomId) return;
+  
+  const farmState = getCurrentFarmState();
+  
+  socket.emit('farm-update', {
+    roomId: roomId,
+    farmState: farmState,
+    wheatCount: wheatCount
+  });
+  
+  console.log('Farm state update sent to server');
 } 

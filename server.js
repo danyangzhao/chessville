@@ -155,7 +155,7 @@ io.on('connection', (socket) => {
         gameRoomId = uuidv4().substring(0, 8);
         log('INFO', `Creating new game room: ${gameRoomId}`);
         
-        // Initialize the new game room
+        // Initialize the new game room with more complete game state
         gameRooms[gameRoomId] = {
           id: gameRoomId,
           players: {},
@@ -163,10 +163,13 @@ io.on('connection', (socket) => {
           gameState: {
             chessEngineState: new Chess().fen(),
             isGameOver: false,
-            winner: null
+            winner: null,
+            farmState: {}, // Store farm state for each player
+            wheatCounts: {} // Store wheat counts for each player
           },
           currentTurn: 'white',
-          disconnectedPlayers: {} // Track disconnected players in this room
+          disconnectedPlayers: {}, // Track disconnected players in this room
+          createdAt: Date.now()
         };
       }
       
@@ -180,10 +183,13 @@ io.on('connection', (socket) => {
           gameState: {
             chessEngineState: new Chess().fen(),
             isGameOver: false,
-            winner: null
+            winner: null,
+            farmState: {}, // Store farm state for each player
+            wheatCounts: {} // Store wheat counts for each player
           },
           currentTurn: 'white',
-          disconnectedPlayers: {} // Track disconnected players in this room
+          disconnectedPlayers: {}, // Track disconnected players in this room
+          createdAt: Date.now()
         };
       }
       
@@ -196,14 +202,19 @@ io.on('connection', (socket) => {
         playerColor = previousColor;
         const isFirstPlayer = playerColor === 'white';
         
+        // Get the saved player data
+        const savedPlayerData = gameRooms[gameRoomId].disconnectedPlayers[playerColor];
+        
         // Remove from disconnected players list
         delete gameRooms[gameRoomId].disconnectedPlayers[playerColor];
         
-        // Add player back to the room
+        // Add player back to the room with their previous data
         gameRooms[gameRoomId].players[socket.id] = {
           id: socket.id,
-          username: username || 'Player',
-          color: playerColor
+          username: username || savedPlayerData.username || 'Player',
+          color: playerColor,
+          wheatCount: savedPlayerData.wheatCount || 100, // Restore wheat count or default
+          farmState: savedPlayerData.farmState || [] // Restore farm state or default
         };
         
         // Increment player count
@@ -214,12 +225,14 @@ io.on('connection', (socket) => {
         
         log('INFO', `Player ${socket.id} successfully reconnected to room ${gameRoomId} as ${playerColor}`);
         
-        // Notify player they've reconnected
+        // Notify player they've reconnected with the full game state
         socket.emit('reconnectSuccess', {
           roomId: gameRoomId,
           color: playerColor,
           gameState: gameRooms[gameRoomId].gameState,
-          currentTurn: gameRooms[gameRoomId].currentTurn
+          currentTurn: gameRooms[gameRoomId].currentTurn,
+          wheatCount: savedPlayerData.wheatCount || 100,
+          farmState: savedPlayerData.farmState || []
         });
         
         // Notify other player that opponent has reconnected
@@ -378,6 +391,48 @@ io.on('connection', (socket) => {
     }
   });
   
+  // Add handler for farm state updates
+  socket.on('farm-update', (data) => {
+    try {
+      const { roomId, farmState, wheatCount } = data;
+      
+      // Validate the room exists
+      if (!gameRooms[roomId]) {
+        log('WARN', `Farm update attempted in non-existent room: ${roomId}`);
+        socket.emit('error', { message: 'Game room not found' });
+        return;
+      }
+      
+      // Get the player from this socket
+      const player = gameRooms[roomId].players[socket.id];
+      if (!player) {
+        log('WARN', `Player not found in room ${roomId}`);
+        socket.emit('error', { message: 'Player not found in this game' });
+        return;
+      }
+      
+      // Store the farm state and wheat count for this player
+      player.farmState = farmState;
+      player.wheatCount = wheatCount;
+      
+      // Also store in the gameState for persistence
+      if (!gameRooms[roomId].gameState.farmState) {
+        gameRooms[roomId].gameState.farmState = {};
+      }
+      if (!gameRooms[roomId].gameState.wheatCounts) {
+        gameRooms[roomId].gameState.wheatCounts = {};
+      }
+      
+      gameRooms[roomId].gameState.farmState[player.color] = farmState;
+      gameRooms[roomId].gameState.wheatCounts[player.color] = wheatCount;
+      
+      log('INFO', `Farm state updated for player ${player.color} in room ${roomId}`);
+    } catch (error) {
+      log('ERROR', 'Error handling farm-update:', error);
+      socket.emit('error', { message: 'Failed to update farm state' });
+    }
+  });
+  
   // Handle disconnection
   socket.on('disconnect', () => {
     log('INFO', 'Client disconnected:', socket.id);
@@ -391,11 +446,14 @@ io.on('connection', (socket) => {
         
         log('INFO', `Player ${socket.id} (${color}) left room ${roomId}`);
         
-        // Instead of immediately removing, mark as disconnected with a timestamp
+        // Store more complete player state for reconnection
         room.disconnectedPlayers[color] = {
           username: playerInfo.username,
           timestamp: Date.now(),
-          timeToLive: PLAYER_RECONNECT_TIMEOUT
+          timeToLive: PLAYER_RECONNECT_TIMEOUT,
+          wheatCount: playerInfo.wheatCount || 100,
+          farmState: playerInfo.farmState || [],
+          // Store any other player state we need to restore
         };
         
         // Remove the player from active players
