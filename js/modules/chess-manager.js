@@ -119,6 +119,11 @@ const ChessManager = (function() {
       // Clear any existing board
       boardContainer.innerHTML = '';
       
+      // Enhanced logging - log if a FEN is directly provided
+      if (savedFEN) {
+        debugLog('Direct FEN position provided to setupBoard:', savedFEN);
+      }
+      
       // IMPROVED: More robust game state checking
       // Check for saved game state in localStorage if no savedFEN is provided
       if (!savedFEN) {
@@ -190,12 +195,21 @@ const ChessManager = (function() {
           const isValidFEN = validateFEN(savedFEN);
           
           if (isValidFEN) {
+            debugLog('FEN passed validation, loading into chess engine');
             const loadSuccess = chessEngine.load(savedFEN);
             if (!loadSuccess) {
               console.error('Failed to load saved FEN position, resetting to starting position');
               chessEngine.reset();
             } else {
               debugLog('Successfully loaded saved FEN position');
+              
+              // Save the current FEN to localStorage again for sync
+              if (typeof GameState !== 'undefined' && typeof GameState.saveGameState === 'function') {
+                setTimeout(() => {
+                  debugLog('Saving restored game state to localStorage');
+                  GameState.saveGameState();
+                }, 100);
+              }
             }
           } else {
             console.error('Invalid FEN format, resetting to starting position');
@@ -222,32 +236,47 @@ const ChessManager = (function() {
       debugLog(`Chess engine current turn: ${chessEngine.turn()}`);
       debugLog('Available legal moves:', chessEngine.moves({ verbose: true }));
       
-      // Configure the board
+      // Create board configuration
       const config = {
+        draggable: true,
         position: chessEngine.fen(),
-        orientation: orientation,
-        pieceTheme: '/img/chesspieces/wikipedia/{piece}.png',
-        draggable: false, // Disable dragging for click-to-move implementation
-        onClick: handleSquareClick // Add click handler for squares
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd,
+        pieceTheme: 'img/chesspieces/{piece}.png'
       };
       
-      // Initialize the board
-      debugLog('Initializing chessboard.js with config:', config);
+      // Create board
       chessboard = Chessboard('chess-board', config);
       
-      // Setup resize handler
-      window.addEventListener('resize', () => {
-        if (chessboard) {
-          chessboard.resize();
-        }
-      });
-      
-      // Setup click handler for board squares
+      // Setup click handler for additional interaction
       setupBoardClickHandler();
       
-      debugLog('Chess board setup complete');
+      // Setup touch event fixes for mobile
+      setupTouchEventFixes();
+      
+      // Make sure the board reflects the current position (especially important for restored games)
+      setTimeout(() => {
+        debugLog('Refreshing board after setup');
+        refreshBoard();
+        
+        // If there is a saved FEN that was loaded, log confirmation that it's correctly shown
+        if (savedFEN) {
+          const currentFEN = chessEngine.fen();
+          debugLog('Board setup complete. Using position:', currentFEN);
+          // If they don't match exactly (ignoring move counts), that could indicate a problem
+          if (currentFEN.split(' ')[0] !== savedFEN.split(' ')[0]) {
+            console.warn('⚠️ Current board position does not match saved FEN!');
+            console.warn('Current:', currentFEN);
+            console.warn('Saved:', savedFEN);
+          }
+        }
+      }, 200);
+      
+      return true;
     } catch (error) {
       console.error('Error setting up chess board:', error);
+      return false;
     }
   }
   
@@ -904,6 +933,71 @@ const ChessManager = (function() {
     debugLog('Piece rotation disabled - using standard orientation');
   }
   
+  /**
+   * Manually restore saved game state from localStorage
+   * This can be called if automatic reconnection fails
+   * @returns {boolean} True if state was restored, false otherwise
+   */
+  function manuallyRestoreSavedState() {
+    try {
+      debugLog('Attempting to manually restore saved game state');
+      
+      // Get saved state from localStorage
+      const savedState = localStorage.getItem('chessFarm_gameState');
+      if (!savedState) {
+        console.warn('No saved game state found in localStorage');
+        return false;
+      }
+      
+      const gameState = JSON.parse(savedState);
+      
+      // Check if state is valid and for the current room
+      const currentRoomId = GameState.getRoomId();
+      if (!gameState.roomId || (currentRoomId && gameState.roomId !== currentRoomId)) {
+        console.warn('Saved game state is for a different room');
+        return false;
+      }
+      
+      // Check if state is recent enough (within 5 minutes)
+      const now = Date.now();
+      const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
+      if (!gameState.timestamp || (now - gameState.timestamp > reconnectTimeout)) {
+        console.warn('Saved game state is too old');
+        return false;
+      }
+      
+      // Restore chess position if valid
+      if (gameState.fen) {
+        debugLog('Restoring chess position from saved state:', gameState.fen);
+        setupBoard(gameState.fen);
+      }
+      
+      // Restore farm state if available
+      if (gameState.farmState && typeof FarmManager !== 'undefined' && 
+          typeof FarmManager.restoreFarmState === 'function') {
+        debugLog('Restoring farm state from saved state');
+        FarmManager.restoreFarmState(gameState.farmState);
+      }
+      
+      // Restore resources if available
+      if (gameState.wheatCount !== undefined && typeof GameState !== 'undefined' && 
+          typeof GameState.updateWheat === 'function') {
+        debugLog('Restoring wheat count from saved state:', gameState.wheatCount);
+        const playerColor = GameState.getPlayerColor();
+        GameState.updateWheat(playerColor, gameState.wheatCount - GameState.getWheat(playerColor));
+      }
+      
+      // Refresh the board to make sure changes take effect
+      refreshBoard();
+      
+      console.log('Game state manually restored successfully');
+      return true;
+    } catch (error) {
+      console.error('Error manually restoring game state:', error);
+      return false;
+    }
+  }
+  
   // Public API
   return {
     initialize,
@@ -932,6 +1026,7 @@ const ChessManager = (function() {
       }
       
       return fen;
-    }
+    },
+    manuallyRestoreSavedState: manuallyRestoreSavedState
   };
 })(); 

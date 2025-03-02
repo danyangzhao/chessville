@@ -325,6 +325,31 @@ const SocketManager = (function() {
         GameState.setCurrentTurn(data.startingTurn);
       }
       
+      // Check for saved game state in localStorage
+      let savedFEN = null;
+      try {
+        const savedState = localStorage.getItem('chessFarm_gameState');
+        if (savedState) {
+          const gameState = JSON.parse(savedState);
+          console.log('🔴 Found saved game state during gameStart:', gameState);
+          
+          // If we have a saved FEN, it might be a reconnection attempt
+          if (gameState.fen && gameState.roomId === data.roomId) {
+            console.log('🔴 Using saved FEN position for board setup:', gameState.fen);
+            savedFEN = gameState.fen;
+            
+            // If we have saved farm state, restore it
+            if (gameState.farmState && typeof FarmManager !== 'undefined' && 
+                typeof FarmManager.restoreFarmState === 'function') {
+              console.log('🔴 Restoring farm state from localStorage');
+              FarmManager.restoreFarmState(gameState.farmState);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error checking localStorage for saved game state:', e);
+      }
+      
       // Save the game state for potential reconnection
       if (typeof GameState.saveGameState === 'function') {
         console.log('🔴 Saving game state after game start');
@@ -334,9 +359,14 @@ const SocketManager = (function() {
       // Show the game screen
       UIManager.showScreen('game-screen');
       
-      // Setup the chess board
+      // Setup the chess board with saved FEN if available
       if (typeof ChessManager !== 'undefined' && typeof ChessManager.setupBoard === 'function') {
-        ChessManager.setupBoard();
+        if (savedFEN) {
+          console.log('🔴 Setting up chess board with saved FEN');
+          ChessManager.setupBoard(savedFEN);
+        } else {
+          ChessManager.setupBoard();
+        }
       }
       
       // Update turn indicator

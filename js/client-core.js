@@ -86,8 +86,82 @@ document.addEventListener('DOMContentLoaded', () => {
     // Remove this line - we'll let the actual game start set up the board properly
     // ChessManager.showMoveCosts();
     
-    // Phase 5: Check for auto-reconnect
+    // Phase 5: Check for auto-reconnect functionality
     console.log('Phase 5: Checking for auto-reconnect');
+    
+    // Add event listener for manual game restoration
+    const restoreButton = document.getElementById('restore-game-button');
+    if (restoreButton) {
+      restoreButton.addEventListener('click', function() {
+        console.log('Manual game state restoration requested');
+        if (typeof ChessManager !== 'undefined' && typeof ChessManager.manuallyRestoreSavedState === 'function') {
+          const success = ChessManager.manuallyRestoreSavedState();
+          if (success) {
+            UIManager.showMessage('Game state successfully restored!', 'success');
+            // Show the game screen if it's not already visible
+            if (document.getElementById('game-screen').classList.contains('hidden')) {
+              UIManager.showScreen('game-screen');
+            }
+          } else {
+            UIManager.showMessage('Could not restore game state.', 'error');
+          }
+        } else {
+          console.error('ChessManager.manuallyRestoreSavedState is not available');
+          UIManager.showMessage('Game restoration function not available.', 'error');
+        }
+      });
+    }
+    
+    // Check if we have a saved game state in localStorage
+    try {
+      const hasValidState = (typeof GameState !== 'undefined' && typeof GameState.getSavedStateForReconnection === 'function' && 
+        GameState.getSavedStateForReconnection() !== null);
+      
+      if (hasValidState) {
+        console.log('Valid recent game state found, showing restore option');
+        
+        // Create a restore button if it doesn't exist
+        if (!restoreButton) {
+          const loginScreen = document.getElementById('login-screen');
+          if (loginScreen) {
+            const restoreDiv = document.createElement('div');
+            restoreDiv.className = 'restore-game-container';
+            restoreDiv.innerHTML = `
+              <p class="notice">You have a recent game that can be restored.</p>
+              <button id="restore-game-button" class="btn btn-primary">Restore Previous Game</button>
+            `;
+            
+            // Insert before the login form
+            const loginForm = document.querySelector('.login-form');
+            if (loginForm) {
+              loginScreen.insertBefore(restoreDiv, loginForm);
+              
+              // Add event listener to the newly created button
+              document.getElementById('restore-game-button').addEventListener('click', function() {
+                console.log('Manual game state restoration requested');
+                if (typeof ChessManager !== 'undefined' && typeof ChessManager.manuallyRestoreSavedState === 'function') {
+                  const success = ChessManager.manuallyRestoreSavedState();
+                  if (success) {
+                    UIManager.showMessage('Game state successfully restored!', 'success');
+                    // Show the game screen
+                    UIManager.showScreen('game-screen');
+                  } else {
+                    UIManager.showMessage('Could not restore game state.', 'error');
+                  }
+                } else {
+                  console.error('ChessManager.manuallyRestoreSavedState is not available');
+                  UIManager.showMessage('Game restoration function not available.', 'error');
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error checking for saved game state:', e);
+    }
+    
+    // Check if saved state is valid for auto-reconnect
     try {
       const savedState = localStorage.getItem('chessFarm_gameState');
       if (savedState) {
@@ -95,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Date.now();
         const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
         
-        // Check if saved state is valid for auto-reconnect
         if (gameState.roomId && 
             gameState.timestamp && 
             (now - gameState.timestamp <= reconnectTimeout)) {
