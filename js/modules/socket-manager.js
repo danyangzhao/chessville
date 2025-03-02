@@ -43,46 +43,60 @@ const SocketManager = (function() {
   }
   
   /**
-   * Attempt to reconnect to a previous game session
-   * @param {object} reconnectData - Data needed for reconnection
-   * @param {string} reconnectData.username - Player's username
-   * @param {string} reconnectData.roomId - Room ID to reconnect to
-   * @param {string} reconnectData.previousColor - The player's previous color in the game
+   * Handle reconnection to an existing game
+   * @param {Object} reconnectData - Data needed for reconnection
    */
   function reconnect(reconnectData) {
     if (!socket) {
-      console.error('Socket not initialized');
-      return false;
-    }
-    
-    if (!reconnectData.username || !reconnectData.roomId) {
-      console.error('Missing required data for reconnection');
-      return false;
+      console.error('Cannot reconnect - socket not initialized');
+      return;
     }
     
     console.log('🔴 Attempting to reconnect with data:', reconnectData);
     
-    // Add reconnection flag to the data
-    const joinData = {
-      ...reconnectData,
-      isReconnecting: true
-    };
-    
-    // Emit joinGame event with reconnection data
-    socket.emit('joinGame', joinData);
-    
-    // Show waiting screen during reconnection attempt
-    if (typeof UIManager !== 'undefined') {
-      UIManager.showScreen('waiting-screen');
-      
-      // Update room code display
-      const roomCodeDisplay = document.getElementById('room-code-display');
-      if (roomCodeDisplay) {
-        roomCodeDisplay.textContent = reconnectData.roomId;
+    // Try to get saved game state from localStorage
+    try {
+      const savedState = localStorage.getItem('chessFarm_gameState');
+      if (savedState) {
+        const gameState = JSON.parse(savedState);
+        console.log('🔴 Found saved game state in localStorage:', gameState);
+        
+        // Check if the saved state matches the reconnection attempt
+        if (gameState.roomId === reconnectData.roomId) {
+          // Pre-initialize game state with the player color to avoid null issues
+          if (gameState.color) {
+            GameState.setupGame(gameState.roomId, gameState.color);
+            console.log('🔴 Pre-initialized game state with color:', gameState.color);
+          }
+          
+          // Add saved FEN position to reconnection data if available
+          if (gameState.fen) {
+            reconnectData.savedFEN = gameState.fen;
+            console.log('🔴 Adding saved FEN to reconnection data:', gameState.fen);
+          }
+          
+          // Add saved farm state to reconnection data if available
+          if (gameState.farmState) {
+            reconnectData.savedFarmState = gameState.farmState;
+            console.log('🔴 Adding saved farm state to reconnection data');
+          }
+        }
       }
+    } catch (e) {
+      console.error('Error retrieving saved game state:', e);
     }
     
-    return true;
+    // Emit join game with reconnect flag
+    socket.emit('joinGame', {
+      username: reconnectData.username,
+      roomId: reconnectData.roomId,
+      isReconnecting: true,
+      previousColor: reconnectData.previousColor,
+      savedFEN: reconnectData.savedFEN,
+      savedFarmState: reconnectData.savedFarmState
+    });
+    
+    console.log('🔴 Reconnection request sent to server');
   }
   
   /**
@@ -170,22 +184,45 @@ const SocketManager = (function() {
       UIManager.updateGameStatus('Reconnected to game');
       UIManager.updateTurnIndicator();
       
-      // Initialize chess board with saved state if available
+      // Get the FEN position to restore - prioritize server data but fall back to localStorage
+      let fenPosition = null;
+      
+      // First try to use server-provided game state
       if (data.gameState && data.gameState.chessEngineState) {
-        if (typeof ChessManager !== 'undefined') {
-          console.log('🔴 Setting up chess board with saved position');
-          ChessManager.setupBoard(data.gameState.chessEngineState);
-        }
-      } else {
-        // Set up a new chess board if no state is provided
-        if (typeof ChessManager !== 'undefined') {
-          console.log('🔴 Setting up new chess board');
-          ChessManager.setupBoard();
+        console.log('🔴 Using server-provided FEN position for reconnection');
+        fenPosition = data.gameState.chessEngineState;
+      } 
+      // If no server FEN, check data.savedFEN (passed from our reconnect function)
+      else if (data.savedFEN) {
+        console.log('🔴 Using client-saved FEN position for reconnection:', data.savedFEN);
+        fenPosition = data.savedFEN;
+      }
+      // Lastly, try localStorage directly as a fallback
+      else {
+        try {
+          const savedState = localStorage.getItem('chessFarm_gameState');
+          if (savedState) {
+            const gameState = JSON.parse(savedState);
+            if (gameState.fen && gameState.roomId === data.roomId) {
+              console.log('🔴 Using localStorage FEN position for reconnection:', gameState.fen);
+              fenPosition = gameState.fen;
+            }
+          }
+        } catch (e) {
+          console.error('Error checking localStorage for FEN position:', e);
         }
       }
       
-      // Show success message
-      UIManager.showMessage('Successfully reconnected to your game!', 'success');
+      // Initialize chess board with the appropriate FEN position
+      if (typeof ChessManager !== 'undefined') {
+        if (fenPosition) {
+          console.log('🔴 Setting up chess board with saved position:', fenPosition);
+          ChessManager.setupBoard(fenPosition);
+        } else {
+          console.log('🔴 No saved position found, setting up new chess board');
+          ChessManager.setupBoard();
+        }
+      }
     });
     
     socket.on('roomFull', (data) => {

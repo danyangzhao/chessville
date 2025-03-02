@@ -577,6 +577,14 @@ const GameState = (function() {
     }
   }
   
+  /**
+   * Get the current room ID
+   * @returns {string} The current room ID
+   */
+  function getRoomId() {
+    return roomId;
+  }
+  
   // Public API
   return {
     initialize,
@@ -598,56 +606,16 @@ const GameState = (function() {
     getResources,
     recordCapture,
     getCapturedPieces,
+    checkEconomicVictory,
     declareWinner,
-    
-    // Sync with server
-    updateFromServer: (serverGameState) => {
-      console.log('Updating game state from server:', serverGameState);
-      
-      // Update resources if they exist in the server state
-      if (serverGameState.farms) {
-        // Get the wheat from each player's farm
-        if (serverGameState.farms.white && typeof serverGameState.farms.white.wheat === 'number') {
-          resources.white.wheat = serverGameState.farms.white.wheat;
-        }
-        
-        if (serverGameState.farms.black && typeof serverGameState.farms.black.wheat === 'number') {
-          resources.black.wheat = serverGameState.farms.black.wheat;
-        }
-        
-        // Update the farm data in FarmManager if available
-        if (typeof FarmManager.updateFarmsFromServer === 'function') {
-          FarmManager.updateFarmsFromServer(serverGameState.farms);
-        }
-      }
-      
-      // Update UI elements
-      UIManager.updateResourceDisplay();
-    },
-    
-    // Getters
-    getRoomId: () => roomId,
-    getPlayerColor: getPlayerColor,
-    getCurrentTurn: getCurrentTurn,
-    isGameActive: () => gameActive,
-    isOpponentConnected: () => opponentConnected,
-    setOpponentConnected: (status) => {
-      opponentConnected = status;
-      if (status) UIManager.updateGameStatus();
-    },
-    getWinner: () => winner,
-    
-    // Additional setters
-    setCurrentTurn: setCurrentTurn,
-    
-    // Reset farm action taken flag
-    resetFarmActionTaken: () => {
-      farmActionTaken = false;
-      console.log('Farm action flag reset');
-    },
-    
-    // New functions
+    getPlayerColor,
+    getCurrentTurn,
+    setCurrentTurn,
+    getRoomId,
     saveGameState,
-    clearGameState
+    clearGameState,
+    setOpponentConnected,
+    isOpponentConnected,
+    isActive
   };
 })(); 

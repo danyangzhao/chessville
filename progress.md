@@ -1256,3 +1256,124 @@ The root causes were:
 This fix highlights the importance of defensive programming in UI components, especially in a modular architecture where state may be managed across different components.
 
 **Date Fixed:** 2025-03-08
+
+## Latest Update (2025-03-02)
+
+### Fixed Player Reconnection Issue
+
+**Status:** Completed
+**Description:** Fixed an issue where a player reconnecting to a game would have the chess board reset instead of restored from localStorage.
+
+**Problem:**
+When player 1 (white) would rejoin a disconnected session, the game was resetting the chess board to the starting position without checking localStorage to see if there was an existing saved game state. This resulted in loss of game progress and farm state during reconnection.
+
+**Diagnosis:**
+The issue occurred because:
+1. The chess board was being initialized before checking localStorage for an existing saved game state
+2. The reconnection process was not properly passing the saved FEN position to the chess engine
+3. The server-side handler wasn't accepting or validating client-provided game state
+
+**Solution:**
+1. Modified `chess-manager.js` to check localStorage for existing game state before resetting:
+   ```javascript
+   // Check for saved game state in localStorage if no savedFEN is provided
+   if (!savedFEN) {
+     try {
+       const savedState = localStorage.getItem('chessFarm_gameState');
+       if (savedState) {
+         const gameState = JSON.parse(savedState);
+         
+         // Check if saved state is recent enough (within 5 minutes)
+         const now = Date.now();
+         const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
+         
+         if (gameState.fen && gameState.timestamp && 
+             (now - gameState.timestamp <= reconnectTimeout) &&
+             gameState.roomId === GameState.getRoomId()) {
+           debugLog('Found valid saved game state in localStorage, using saved FEN:', gameState.fen);
+           savedFEN = gameState.fen;
+         }
+       }
+     } catch (e) {
+       console.error('Error checking localStorage for saved game state:', e);
+     }
+   }
+   ```
+
+2. Enhanced the `reconnect` function in `socket-manager.js` to properly extract and pass saved game state:
+   ```javascript
+   // Try to get saved game state from localStorage
+   try {
+     const savedState = localStorage.getItem('chessFarm_gameState');
+     if (savedState) {
+       const gameState = JSON.parse(savedState);
+       
+       // Check if the saved state matches the reconnection attempt
+       if (gameState.roomId === reconnectData.roomId) {
+         // Pre-initialize game state with the player color to avoid null issues
+         if (gameState.color) {
+           GameState.setupGame(gameState.roomId, gameState.color);
+         }
+         
+         // Add saved FEN position to reconnection data if available
+         if (gameState.fen) {
+           reconnectData.savedFEN = gameState.fen;
+         }
+         
+         // Add saved farm state to reconnection data if available
+         if (gameState.farmState) {
+           reconnectData.savedFarmState = gameState.farmState;
+         }
+       }
+     }
+   } catch (e) {
+     console.error('Error retrieving saved game state:', e);
+   }
+   ```
+
+3. Updated the server-side `joinGame` handler to properly handle and validate client-provided game state:
+   ```javascript
+   // If we have saved game state from the client, use it
+   if (savedFEN && gameRoom.gameState) {
+     log('INFO', `🔴 Using client-provided FEN for reconnection: ${savedFEN}`);
+     
+     // Try to validate the FEN before using it
+     try {
+       const chessTester = new Chess();
+       if (chessTester.load(savedFEN)) {
+         gameRoom.gameState.chessEngineState = savedFEN;
+         log('INFO', `🔴 Successfully restored chess state from client FEN`);
+       } else {
+         log('WARN', `🔴 Invalid FEN position from client, using server state`);
+       }
+     } catch (e) {
+       log('ERROR', `🔴 Error validating client FEN position: ${e.message}`);
+     }
+   }
+   
+   // If we have saved farm state, use it
+   if (savedFarmState && gameRoom.gameState) {
+     log('INFO', `🔴 Using client-provided farm state for reconnection`);
+     gameRoom.gameState.farmState = {
+       ...gameRoom.gameState.farmState,
+       ...savedFarmState
+     };
+   }
+   ```
+
+4. Enhanced the reconnection success handler to prioritize game state sources in this order:
+   1. Server-provided game state
+   2. Client-provided game state (passed during reconnection)
+   3. Local storage as a last resort
+
+The changes ensure that when a player reconnects to an existing game within the 5-minute reconnection window, the game properly restores both the chess position and farm state from localStorage, allowing seamless continuation of gameplay.
+
+**Testing:**
+The fix was verified by testing the following scenarios:
+1. Player disconnecting and reconnecting within 5 minutes
+2. Player refreshing the page during an active game
+3. Player trying to reconnect after the 5-minute window has expired
+
+In all valid reconnection cases, the chess board state, turn information, and farm state were properly restored.
+
+**Date Fixed:** 2025-03-02

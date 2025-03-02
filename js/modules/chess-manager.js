@@ -98,8 +98,9 @@ const ChessManager = (function() {
   
   /**
    * Set up the chess board
+   * @param {string} [savedFEN] - Optional saved FEN string to restore board position
    */
-  function setupBoard() {
+  function setupBoard(savedFEN) {
     try {
       debugLog('Setting up chess board');
       
@@ -113,12 +114,52 @@ const ChessManager = (function() {
       // Clear any existing board
       boardContainer.innerHTML = '';
       
+      // Check for saved game state in localStorage if no savedFEN is provided
+      if (!savedFEN) {
+        try {
+          const savedState = localStorage.getItem('chessFarm_gameState');
+          if (savedState) {
+            const gameState = JSON.parse(savedState);
+            
+            // Check if saved state is recent enough (within 5 minutes)
+            const now = Date.now();
+            const reconnectTimeout = 5 * 60 * 1000; // 5 minutes
+            
+            if (gameState.fen && gameState.timestamp && 
+                (now - gameState.timestamp <= reconnectTimeout) &&
+                gameState.roomId === GameState.getRoomId()) {
+              debugLog('Found valid saved game state in localStorage, using saved FEN:', gameState.fen);
+              savedFEN = gameState.fen;
+            }
+          }
+        } catch (e) {
+          console.error('Error checking localStorage for saved game state:', e);
+        }
+      }
+      
       // Ensure chess engine is initialized properly
       if (!chessEngine) {
         debugLog('Creating new chess engine instance');
         chessEngine = new Chess();
+      }
+      
+      // If we have a saved FEN, try to load it
+      if (savedFEN) {
+        try {
+          debugLog('Attempting to load saved FEN position:', savedFEN);
+          const loadSuccess = chessEngine.load(savedFEN);
+          if (!loadSuccess) {
+            console.error('Failed to load saved FEN position, resetting to starting position');
+            chessEngine.reset();
+          } else {
+            debugLog('Successfully loaded saved FEN position');
+          }
+        } catch (e) {
+          console.error('Error loading saved FEN position:', e);
+          chessEngine.reset();
+        }
       } else {
-        debugLog('Resetting existing chess engine to starting position');
+        debugLog('No saved FEN found, resetting chess engine to starting position');
         chessEngine.reset();
       }
       
