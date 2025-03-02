@@ -1435,3 +1435,45 @@ We've implemented several changes to fix the reconnection issue:
    - Added detailed logging for board initialization and game state recovery
 
 The key insight was understanding that module initialization order matters, and that we need to ensure GameState recovery happens before chess board initialization. This prevents the board from being reset to the starting position when there's a valid saved game state to restore.
+
+## Recent Fixes (2025-03-05)
+
+### Fix for Chess Board Initialization and Reconnection Issues
+
+**Status:** Completed  
+**Description:** Fixed several issues with chess board initialization, piece dragging, and piece images not displaying correctly.  
+**Details:**
+
+1. **Missing Function Reference Error:**
+   - Fixed error: `ReferenceError: onDragStart is not defined` by adding implementation for essential chess piece drag-and-drop handlers:
+   ```javascript
+   function onDragStart(source, piece, position, orientation) {
+     // Verify it's the player's turn and chess phase
+     // Check piece ownership
+     // Highlight legal moves
+   }
+   
+   function onDrop(source, target, piece, newPosition, oldPosition, orientation) {
+     // Handle piece dropping logic
+     // Validate moves
+     // Apply the move if valid
+   }
+   ```
+   - Added a helper `showMessage` function to display feedback to users when attempting invalid moves
+
+2. **Chess Piece Image Path Issues:**
+   - Fixed 404 errors when loading chess piece images by correcting the path in the ChessManager setup:
+   ```javascript
+   pieceTheme: '/img/chesspieces/wikipedia/{piece}.png'
+   ```
+   - Ensured the path matches the expected location of chess pieces on the server
+   - Standardized the piece theme configuration across the application
+
+3. **Reconnection Process Improvements:**
+   - Enhanced the reconnection process to properly restore saved game state
+   - Added improved validation of saved FEN positions
+   - Implemented retry mechanism for the chess board setup
+   - Added detailed logging for reconnection steps to aid in future debugging
+   - Created a manual restore option for players to recover their game if automatic reconnection fails
+
+These fixes significantly improve the reliability of the chess board initialization and game state restoration, ensuring players can properly reconnect to ongoing games and see the chess pieces displayed correctly.

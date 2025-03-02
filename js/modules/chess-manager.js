@@ -350,7 +350,7 @@ const ChessManager = (function() {
         onDragStart: onDragStart,
         onDrop: onDrop,
         onSnapEnd: onSnapEnd,
-        pieceTheme: 'img/chesspieces/{piece}.png'
+        pieceTheme: '/img/chesspieces/wikipedia/{piece}.png'
       };
       
       // Create board
