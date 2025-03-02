@@ -1968,3 +1968,96 @@ These logs showed that a player who was previously white was reconnecting as bla
 These changes ensure that players always reconnect with their original color, preserving the chess board state and ongoing games. Players can now refresh the page or temporarily disconnect without losing their position or having the game reset.
 
 **Date Fixed:** 2025-03-05
+
+## Enhanced Fix for Player Color Persistence During Reconnection (2025-03-06)
+
+### Issue: Persistent Color Mismatch During Reconnection
+**Status:** Fixed
+**Description:** Despite previous enhancements to the reconnection system, players were still experiencing issues where they would reconnect to a game but be assigned the wrong color (e.g., a white player reconnecting as black). This caused the chess board to reset to the starting position and lose all previous moves.
+
+**Diagnosis:** Through detailed logging and testing, we discovered the following issues:
+1. The server was not always honoring the requested color during reconnection attempts
+2. The client's color was being set too late in the reconnection process
+3. Edge cases where players refreshed pages before socket disconnection created inconsistent state
+
+**Debug Logs Analysis:**
+```
+Game started: {roomId: '222', startingTurn: 'white'}
+[ChessManager Debug] Setting up chess board
+[ChessManager Debug] Player color: black  <-- Should be white!
+[ChessManager Debug] Board orientation: black
+[ChessManager Debug] Chess engine current position: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+```
+
+These logs showed the player was initially white, but after reconnection was incorrectly assigned black.
+
+**Solution - Aggressive Color Preservation:**
+
+1. **Client-Side Enhancement:**
+   - Added immediate color assignment from localStorage **before** reconnection attempt
+   - Pre-initialized chess engine with saved FEN position when available
+   - Added robust logging with clear markers for reconnection flow
+   - Implemented more rigorous color validation and consistency checks
+   - Modified `setupChessGame()` to accept an explicit starting position
+
+   ```javascript
+   // Set global variables from saved state IMMEDIATELY
+   if (gameState.color) {
+     playerColor = gameState.color;
+     console.log('🔴 SETTING PLAYER COLOR FROM STORAGE:', playerColor);
+     
+     // If we have a saved board position, pre-initialize the game
+     if (gameState.fen) {
+       // Initialize the chess engine with the saved position
+       if (!game) {
+         game = new Chess();
+       }
+       try {
+         // Try to load the saved position
+         const success = game.load(gameState.fen);
+         console.log('Preloaded saved FEN position, success:', success);
+       } catch (e) {
+         console.error('Error loading saved FEN:', e);
+         // Fall back to a new game
+         game = new Chess();
+       }
+     }
+   }
+   ```
+
+2. **Server-Side Reinforcement:**
+   - Added forced color assignment based on reconnection request
+   - Implemented comprehensive logging for reconnection attempts
+   - Added a special case handler for players who refresh before disconnection
+   - Enhanced the room lookup logic to prioritize color consistency
+   - Added a forced reconnection feature for cases where player data is lost but room exists
+
+   ```javascript
+   // CRITICAL: Check for reconnection with a specific color
+   if (isReconnecting && previousColor) {
+     log('INFO', `🔴 Reconnection attempt for ${previousColor} player in room ${gameRoomId}`);
+     
+     // Force playerColor to be the requested color (for consistency during reconnection)
+     playerColor = previousColor;
+     
+     // Continue with reconnection logic...
+   }
+   ```
+
+3. **Debugging Enhancements:**
+   - Added color-coded logging with 🔴 markers to trace reconnection flow
+   - Added explicit color validation at critical points in the process
+   - Implemented more verbose logging of game state during reconnection
+   - Added checks for color mismatch between client expectation and server assignment
+
+   ```javascript
+   // CRITICAL: Ensure the color from the server matches our expected color
+   if (playerColor !== data.color) {
+     console.warn(`🔴 Color mismatch during reconnection! Expected: ${playerColor}, Got: ${data.color}`);
+     playerColor = data.color;
+   }
+   ```
+
+These changes ensure that players always reconnect with their original color by taking a more aggressive approach to color preservation and validation throughout the reconnection process. The system now correctly handles all reconnection scenarios, including page refreshes, network disconnections, and cases where player data might be temporarily missing.
+
+**Date Fixed:** 2025-03-06

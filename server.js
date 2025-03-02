@@ -150,7 +150,7 @@ io.on('connection', (socket) => {
       const { username, roomId, isReconnecting, previousColor } = data;
       let gameRoomId = roomId;
       
-      log('INFO', `Join game request received: Room=${roomId}, Username=${username}, Reconnecting=${isReconnecting}, PreviousColor=${previousColor}`);
+      log('INFO', `🔴 Join game request received: Room=${roomId}, Username=${username}, Reconnecting=${isReconnecting}, PreviousColor=${previousColor}`);
       
       // If no room ID is provided, create a new one
       if (!gameRoomId) {
@@ -198,17 +198,17 @@ io.on('connection', (socket) => {
       // Handle reconnection attempt
       let playerColor;
       
-      // Check if we have a valid reconnection attempt with the correct color
+      // CRITICAL: Check for reconnection with a specific color
       if (isReconnecting && previousColor) {
-        log('INFO', `Reconnection attempt for ${previousColor} player in room ${gameRoomId}`);
+        log('INFO', `🔴 Reconnection attempt for ${previousColor} player in room ${gameRoomId}`);
+        
+        // Force playerColor to be the requested color (for consistency during reconnection)
+        playerColor = previousColor;
         
         // Check if this color is in the disconnected players list
         if (gameRooms[gameRoomId].disconnectedPlayers[previousColor]) {
           // Player is trying to reconnect to a game
-          log('INFO', `Player ${socket.id} found in disconnected players as ${previousColor} in room ${gameRoomId}`);
-          
-          playerColor = previousColor;
-          const isFirstPlayer = playerColor === 'white';
+          log('INFO', `🔴 Player ${socket.id} found in disconnected players as ${previousColor} in room ${gameRoomId}`);
           
           // Get the saved player data
           const savedPlayerData = gameRooms[gameRoomId].disconnectedPlayers[playerColor];
@@ -231,7 +231,7 @@ io.on('connection', (socket) => {
           // Join the Socket.io room
           socket.join(gameRoomId);
           
-          log('INFO', `Player ${socket.id} successfully reconnected to room ${gameRoomId} as ${playerColor}`);
+          log('INFO', `🔴 Player ${socket.id} successfully reconnected to room ${gameRoomId} as ${playerColor}`);
           
           // Notify player they've reconnected with the full game state
           socket.emit('reconnectSuccess', {
@@ -251,10 +251,10 @@ io.on('connection', (socket) => {
           return;
         } else {
           // Check if this color might be an active player who's just refreshing their page
-          // This handles the case where the disconnection event hasn't been processed yet
-          log('INFO', `${previousColor} not found in disconnected players, checking active players`);
+          log('INFO', `🔴 ${previousColor} not found in disconnected players, checking active players`);
           
           let foundActivePlayer = false;
+          let oldPlayerId = null;
           
           // Check if there's an active player with this color
           for (const playerId in gameRooms[gameRoomId].players) {
@@ -262,9 +262,10 @@ io.on('connection', (socket) => {
             if (player.color === previousColor) {
               // Found an active player with this color - this is likely a page refresh without disconnection
               foundActivePlayer = true;
+              oldPlayerId = playerId;
               
               // Remove the old socket connection
-              log('INFO', `Found active player with color ${previousColor}, removing old socket ${playerId}`);
+              log('INFO', `🔴 Found active player with color ${previousColor}, removing old socket ${playerId}`);
               delete gameRooms[gameRoomId].players[playerId];
               gameRooms[gameRoomId].playerCount--;
               
@@ -275,15 +276,19 @@ io.on('connection', (socket) => {
           
           if (foundActivePlayer) {
             // This was an active player who refreshed their page
-            playerColor = previousColor;
+            log('INFO', `🔴 This is a page refresh for player color ${playerColor}`);
+            
+            // If we found and removed an active player with this color, check if they had any stored state
+            let wheatCountToRestore = 100;
+            let farmStateToRestore = [];
             
             // Add player back with the same color
             gameRooms[gameRoomId].players[socket.id] = {
               id: socket.id,
               username: username || 'Player',
               color: playerColor,
-              wheatCount: 100, // Default values since we don't have saved data
-              farmState: []
+              wheatCount: wheatCountToRestore,
+              farmState: farmStateToRestore
             };
             
             // Increment player count
@@ -292,7 +297,7 @@ io.on('connection', (socket) => {
             // Join the Socket.io room
             socket.join(gameRoomId);
             
-            log('INFO', `Player ${socket.id} reconnected (from page refresh) to room ${gameRoomId} as ${playerColor}`);
+            log('INFO', `🔴 Player ${socket.id} reconnected (from page refresh) to room ${gameRoomId} as ${playerColor}`);
             
             // Notify player they've reconnected with the full game state
             socket.emit('reconnectSuccess', {
@@ -300,8 +305,8 @@ io.on('connection', (socket) => {
               color: playerColor,
               gameState: gameRooms[gameRoomId].gameState,
               currentTurn: gameRooms[gameRoomId].currentTurn,
-              wheatCount: 100, // Default value
-              farmState: []
+              wheatCount: wheatCountToRestore,
+              farmState: farmStateToRestore
             });
             
             // Notify other player that opponent has reconnected
@@ -310,11 +315,68 @@ io.on('connection', (socket) => {
             });
             
             return;
+          } else {
+            // If player color wasn't found in disconnected or active players, but we're trying to reconnect
+            // This is a special case - the room exists but player data is lost
+            log('INFO', `🔴 Reconnection requested for ${previousColor} but player not found in room ${gameRoomId}`);
+            
+            // Check if the room is full
+            const activePlayers = Object.keys(gameRooms[gameRoomId].players);
+            
+            // Special handle: if room is empty or has only one player, allow forced reconnection
+            if (activePlayers.length < 2) {
+              log('INFO', `🔴 Room has space, allowing forced reconnection as ${previousColor}`);
+              
+              // Check if the requested color is already taken
+              let colorTaken = false;
+              for (const pid in gameRooms[gameRoomId].players) {
+                if (gameRooms[gameRoomId].players[pid].color === previousColor) {
+                  colorTaken = true;
+                  break;
+                }
+              }
+              
+              if (colorTaken) {
+                log('WARN', `🔴 Requested color ${previousColor} is taken, cannot force reconnection`);
+                socket.emit('error', { message: 'Your previous slot in this game is already filled by another player.' });
+                return;
+              }
+              
+              // Force reconnection with the requested color
+              gameRooms[gameRoomId].players[socket.id] = {
+                id: socket.id,
+                username: username || 'Player',
+                color: playerColor,
+                wheatCount: 100,
+                farmState: []
+              };
+              
+              // Increment player count
+              gameRooms[gameRoomId].playerCount++;
+              
+              // Join the Socket.io room
+              socket.join(gameRoomId);
+              
+              log('INFO', `🔴 Player ${socket.id} force-reconnected to room ${gameRoomId} as ${playerColor}`);
+              
+              // Notify player they've reconnected
+              socket.emit('reconnectSuccess', {
+                roomId: gameRoomId,
+                color: playerColor,
+                gameState: gameRooms[gameRoomId].gameState,
+                currentTurn: gameRooms[gameRoomId].currentTurn,
+                wheatCount: 100,
+                farmState: []
+              });
+              
+              return;
+            }
           }
         }
       }
       
       // If we got here, either it's not a reconnection attempt or the reconnection failed
+      log('INFO', `🔴 Regular join or failed reconnection for room ${gameRoomId}`);
       
       // Check if the room is full
       if (Object.keys(gameRooms[gameRoomId].players).length >= 2) {
@@ -327,6 +389,8 @@ io.on('connection', (socket) => {
       // Determine player color (first player is white, second is black)
       playerColor = gameRooms[gameRoomId].playerCount === 0 ? 'white' : 'black';
       const isFirstPlayer = playerColor === 'white';
+      
+      log('INFO', `🔴 Assigning player ${socket.id} to ${playerColor} in room ${gameRoomId}`);
       
       // Add player to the room
       gameRooms[gameRoomId].players[socket.id] = {

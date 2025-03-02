@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Check for saved game state and attempt to reconnect
   tryReconnect();
+  
+  // Debug log for initialization
+  console.log('Game initialized, checking for saved state');
 });
 
 // Try to reconnect to a previous game if session data exists
@@ -41,9 +44,13 @@ function tryReconnect() {
   try {
     // Check if we have saved game state
     const savedState = localStorage.getItem(STORAGE_KEYS.GAME_STATE);
-    if (!savedState) return;
+    if (!savedState) {
+      console.log('No saved state found in localStorage');
+      return;
+    }
     
     const gameState = JSON.parse(savedState);
+    console.log('Found saved game state in localStorage:', gameState);
     
     // Check if the saved state is still valid (within last 5 minutes)
     const now = Date.now();
@@ -52,30 +59,53 @@ function tryReconnect() {
     
     if (gameState.timestamp && (now - gameState.timestamp > timeout)) {
       // Saved state is too old, clear it
+      console.log('Saved state is too old, clearing it');
       localStorage.removeItem(STORAGE_KEYS.GAME_STATE);
       return;
     }
     
-    console.log('Found saved game state, attempting to reconnect...', gameState);
+    console.log('Found valid saved game state, attempting to reconnect...', gameState);
     
     // Update UI to show reconnection attempt
     showMessage('Attempting to reconnect to your previous game...', 'info');
     
-    // Set global variables from saved state temporarily
-    // This helps ensure proper initialization when the game starts
+    // Set global variables from saved state IMMEDIATELY
+    // This is critical to ensure the proper color is used during reconnection
     if (gameState.color) {
       playerColor = gameState.color;
-      console.log('Setting player color from saved state:', playerColor);
+      console.log('🔴 SETTING PLAYER COLOR FROM STORAGE:', playerColor);
+      
+      // If we have a saved board position, pre-initialize the game
+      if (gameState.fen) {
+        // Initialize the chess engine with the saved position
+        if (!game) {
+          game = new Chess();
+        }
+        try {
+          // Try to load the saved position
+          const success = game.load(gameState.fen);
+          console.log('Preloaded saved FEN position, success:', success);
+        } catch (e) {
+          console.error('Error loading saved FEN:', e);
+          // Fall back to a new game
+          game = new Chess();
+        }
+      }
     }
     
     // Use saved state to try to reconnect
     if (gameState.roomId && gameState.color && gameState.username) {
-      socket.emit('joinGame', {
+      // This is critical - ensure we're using the correct color during reconnection
+      const reconnectInfo = {
         username: gameState.username,
         roomId: gameState.roomId,
         isReconnecting: true,
         previousColor: gameState.color
-      });
+      };
+      
+      console.log('🔴 Sending reconnection attempt with data:', reconnectInfo);
+      
+      socket.emit('joinGame', reconnectInfo);
       
       // Show waiting screen during reconnection attempt
       showScreen('waiting');
@@ -93,14 +123,21 @@ function tryReconnect() {
 
 // Handle successful reconnection to a game
 function handleReconnectSuccess(data) {
-  console.log('Successfully reconnected to game with data:', data);
+  console.log('🔴 Successfully reconnected to game with data:', data);
+  
+  // CRITICAL: Ensure the color from the server matches our expected color
+  // If there's a mismatch, force the server's color (but log the discrepancy)
+  if (playerColor !== data.color) {
+    console.warn(`🔴 Color mismatch during reconnection! Expected: ${playerColor}, Got: ${data.color}`);
+    playerColor = data.color;
+  }
   
   // Set or restore game state
   roomId = data.roomId;
   playerColor = data.color;
   currentTurn = data.currentTurn;
   
-  console.log('Reconnected as color:', playerColor);
+  console.log('🔴 Reconnected as color:', playerColor);
   
   // Restore farm state and wheat count if provided
   if (data.wheatCount !== undefined) {
@@ -123,18 +160,8 @@ function handleReconnectSuccess(data) {
   // Show game screen
   showScreen('game');
   
-  // Setup chess board if not already set up
-  if (!board || !game) {
-    setupChessGame();
-  }
-  
-  // Update board with current game state
-  if (data.gameState && data.gameState.chessEngineState) {
-    console.log('Loading chess state from server:', data.gameState.chessEngineState);
-    game.load(data.gameState.chessEngineState);
-    board.position(game.fen());
-    board.orientation(playerColor);
-  }
+  // Setup chess board with the correct color and position
+  setupChessGame(data.gameState && data.gameState.chessEngineState);
   
   // Update UI based on current turn
   updateTurnIndicator();
@@ -373,24 +400,36 @@ function handleErrorMessage(data) {
   showMessage(data.message || 'An error occurred', 'error');
 }
 
-// Setup the chess game board and engine
-function setupChessGame() {
+// Setup the chess game board and engine with optional starting position
+function setupChessGame(startPosition) {
   // Initialize the chess.js engine
   game = new Chess();
   
+  // Set the starting position if provided
+  if (startPosition) {
+    console.log('🔴 Setting up chess board with saved position:', startPosition);
+    try {
+      game.load(startPosition);
+    } catch (e) {
+      console.error('Error loading position:', e);
+    }
+  }
+  
   // Log setup information for debugging
-  console.log(`Setting up chess board with color: ${playerColor}`);
+  console.log(`🔴 Setting up chess board with color: ${playerColor}`);
   
   // Configure the board position
   const config = {
     draggable: true,
-    position: 'start',
+    position: game.fen(), // Use the current position (either default or loaded)
     orientation: playerColor,
     pieceTheme: '/img/chesspieces/wikipedia/{piece}.png',
     onDragStart: onDragStart,
     onDrop: onDrop,
     onSnapEnd: onSnapEnd
   };
+  
+  console.log('🔴 Chess board configuration:', config);
   
   // Initialize the chessboard
   board = Chessboard('chess-board', config);
