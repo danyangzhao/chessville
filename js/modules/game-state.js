@@ -585,6 +585,76 @@ const GameState = (function() {
     return roomId;
   }
   
+  /**
+   * Update game state from server data
+   * @param {Object} serverGameState - The game state from the server
+   */
+  function updateFromServer(serverGameState) {
+    console.log('Updating game state from server data:', serverGameState);
+    
+    // Update wheat counts if provided
+    if (serverGameState.wheatCounts) {
+      for (const color in serverGameState.wheatCounts) {
+        if (resources[color]) {
+          resources[color].wheat = serverGameState.wheatCounts[color];
+          console.log(`Updated ${color} wheat count to ${resources[color].wheat}`);
+        }
+      }
+    }
+    
+    // Update farm state if provided and FarmManager exists
+    if (serverGameState.farmState && typeof FarmManager !== 'undefined' && typeof FarmManager.restoreFarmState === 'function') {
+      console.log('Restoring farm state from server data');
+      FarmManager.restoreFarmState(serverGameState.farmState);
+    }
+    
+    // Update game state flags if provided
+    if (typeof serverGameState.isGameOver !== 'undefined') {
+      gameActive = !serverGameState.isGameOver;
+    }
+    
+    if (serverGameState.winner) {
+      winner = serverGameState.winner;
+    }
+    
+    // Update UI
+    if (typeof UIManager !== 'undefined') {
+      UIManager.updateResourceDisplay();
+    }
+  }
+  
+  /**
+   * Set whether opponent is connected
+   * @param {boolean} isConnected - Whether the opponent is connected
+   */
+  function setOpponentConnected(isConnected) {
+    opponentConnected = isConnected;
+    console.log(`Opponent connection status set to: ${isConnected}`);
+    
+    // Update UI if available
+    if (typeof UIManager !== 'undefined' && UIManager.updateGameStatus) {
+      UIManager.updateGameStatus(
+        isConnected ? 'Opponent connected' : 'Opponent disconnected'
+      );
+    }
+  }
+  
+  /**
+   * Check if opponent is connected
+   * @returns {boolean} True if opponent is connected
+   */
+  function isOpponentConnected() {
+    return opponentConnected;
+  }
+  
+  /**
+   * Check if game is active
+   * @returns {boolean} True if game is active
+   */
+  function isActive() {
+    return gameActive;
+  }
+  
   // Public API
   return {
     initialize,
@@ -616,6 +686,7 @@ const GameState = (function() {
     clearGameState,
     setOpponentConnected,
     isOpponentConnected,
-    isActive
+    isActive,
+    updateFromServer
   };
 })(); 
