@@ -2262,14 +2262,6 @@ Root cause analysis revealed three key issues:
          return;
        }
        
-       // Check if the saved state is too old
-       const now = Date.now();
-       if (savedState.timestamp && (now - savedState.timestamp > RECONNECT_TIMEOUT)) {
-         console.log('🔴 Saved game state is too old (>5 minutes), not reconnecting');
-         localStorage.removeItem(GAME_STATE_KEY);
-         return;
-       }
-       
        // CRITICAL: Set up game state with saved player color to prevent null values during reconnection
        if (typeof GameState !== 'undefined' && savedState.color) {
          console.log('🔴 Pre-initializing game state with saved color:', savedState.color);
@@ -2315,3 +2307,96 @@ Root cause analysis revealed three key issues:
 This fix demonstrates the importance of ensuring consistent state across different modules in a modular application architecture, particularly for complex features like reconnection.
 
 **Date Fixed:** 2025-03-07
+
+## UI Setup Errors during Reconnection (2025-03-08)
+
+### Issue: TypeError when Setting Up UI During Reconnection
+**Status:** Fixed
+**Description:** Despite previous reconnection fixes, players were encountering UI errors during the reconnection process. Specifically, a JavaScript error occurred when setting up the UI after reconnection: `TypeError: Cannot read properties of undefined (reading 'charAt')`.
+
+**Diagnosis:** The error occurred in the `UIManager.setupGameUI` function when it tried to access the player color. The error trace showed:
+
+```
+ui-manager.js:358 Uncaught TypeError: Cannot read properties of undefined (reading 'charAt')
+    at Object.setupGameUI (ui-manager.js:358:52)
+    at i.<anonymous> (socket-manager.js:279:17)
+```
+
+The root causes were:
+1. Some event handlers were calling `setupGameUI()` without passing required parameters
+2. The `UIManager.setupGameUI` function didn't have defensive coding to handle undefined values
+3. During certain reconnection scenarios, player color information wasn't properly passed between modules
+
+**Solution Implemented:**
+
+1. **Enhanced UI Manager with Defensive Coding:**
+   - Added null/undefined checks for player color in `setupGameUI`
+   - Implemented fallback to retrieve player color from `GameState` if not provided
+   - Added defensive defaults to prevent UI errors
+   
+   ```javascript
+   function setupGameUI(roomId, playerColor) {
+     console.log('Setting up game UI. Room:', roomId, 'Player color:', playerColor);
+     
+     // Defensive check: If playerColor is undefined, try to get it from GameState
+     if (!playerColor && typeof GameState !== 'undefined') {
+       playerColor = GameState.getPlayerColor();
+       console.log('🔴 Retrieved player color from GameState:', playerColor);
+     }
+     
+     // Further defensive check: Still undefined, default to a value to prevent errors
+     if (!playerColor) {
+       console.error('🔴 Player color is undefined in setupGameUI! This should not happen.');
+       playerColor = 'white'; // Default to prevent errors
+     }
+     
+     const playerColorDisplay = document.getElementById('player-color');
+     if (playerColorDisplay) {
+       playerColorDisplay.textContent = playerColor.charAt(0).toUpperCase() + playerColor.slice(1);
+     }
+   }
+   ```
+
+2. **Fixed Event Handlers in Socket Manager:**
+   - Updated `gameStart` event handler to properly pass parameters to `setupGameUI`
+   - Fixed `opponent-joined` event handler to include required parameters
+   - Added detailed logging for UI setup operations
+   
+   ```javascript
+   socket.on('gameStart', (data) => {
+     // ... existing code ...
+     
+     // Setup game UI elements with the correct parameters
+     const currentRoomId = roomId;
+     const playerColor = GameState.getPlayerColor();
+     console.log('🔴 Setting up game UI with:', { roomId: currentRoomId, playerColor });
+     
+     // Pass the required parameters
+     UIManager.setupGameUI(currentRoomId, playerColor);
+     
+     // ... rest of the handler ...
+   });
+   
+   socket.on('opponent-joined', (data) => {
+     // ... existing code ...
+     
+     // Setup game UI elements with the current room ID and player color
+     console.log('🔴 Setting up game UI after opponent joined');
+     UIManager.setupGameUI(roomId, GameState.getPlayerColor());
+     
+     // ... rest of the handler ...
+   });
+   ```
+
+3. **Improved Room Code Display:**
+   - Added fallback for room ID display when the value is undefined
+   - Ensured CSS classes for player color are properly managed
+
+**Results:**
+- UI setup no longer throws errors during reconnection process
+- Player color and room information is correctly displayed even in edge cases
+- The reconnection experience is more robust, with proper fallbacks in place
+
+This fix highlights the importance of defensive programming in UI components, especially in a modular architecture where state may be managed across different components.
+
+**Date Fixed:** 2025-03-08

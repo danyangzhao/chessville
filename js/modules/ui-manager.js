@@ -341,22 +341,38 @@ const UIManager = (function() {
   }
   
   /**
-   * Set up the game UI with player-specific information
+   * Set up the game UI elements based on the player's color and room ID
    * @param {string} roomId - The room ID
-   * @param {string} playerColor - The player's color
+   * @param {string} playerColor - The player's color ('white' or 'black')
    */
   function setupGameUI(roomId, playerColor) {
-    // Update room ID and player color display
+    console.log('Setting up game UI. Room:', roomId, 'Player color:', playerColor);
+    
+    // Defensive check: If playerColor is undefined, try to get it from GameState
+    if (!playerColor && typeof GameState !== 'undefined') {
+      playerColor = GameState.getPlayerColor();
+      console.log('🔴 Retrieved player color from GameState:', playerColor);
+    }
+    
+    // Further defensive check: Still undefined, default to a value to prevent errors
+    if (!playerColor) {
+      console.error('🔴 Player color is undefined in setupGameUI! This should not happen.');
+      playerColor = 'white'; // Default to prevent errors
+    }
+    
     const roomIdDisplay = document.getElementById('room-id-display');
     const playerColorDisplay = document.getElementById('player-color');
     
     if (roomIdDisplay) {
-      roomIdDisplay.textContent = roomId;
+      roomIdDisplay.textContent = roomId || 'Unknown';
     }
     
     if (playerColorDisplay) {
       playerColorDisplay.textContent = playerColor.charAt(0).toUpperCase() + playerColor.slice(1);
     }
+    
+    // Remove any previous color classes before adding the new one
+    document.body.classList.remove('player-white', 'player-black');
     
     // Add the player's color as a class to the body
     document.body.classList.add(`player-${playerColor}`);

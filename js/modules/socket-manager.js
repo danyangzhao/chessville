@@ -167,6 +167,10 @@ const SocketManager = (function() {
         GameState.setCurrentTurn(data.currentTurn);
       }
       
+      // Setup UI with room ID and player color
+      console.log('🔴 Setting up game UI after successful reconnection');
+      UIManager.setupGameUI(data.roomId, data.color);
+      
       // Update UI
       UIManager.showScreen('game-screen');
       UIManager.updateGameStatus('Reconnected to game');
@@ -228,6 +232,10 @@ const SocketManager = (function() {
         // Setup chess board
         ChessManager.setupBoard();
         
+        // Setup game UI elements with the current room ID and player color
+        console.log('🔴 Setting up game UI after opponent joined');
+        UIManager.setupGameUI(roomId, GameState.getPlayerColor());
+        
         // Update UI based on whether it's the player's turn
         if (GameState.isPlayerTurn()) {
           GameState.setCurrentGamePhase('farming');
@@ -275,8 +283,13 @@ const SocketManager = (function() {
       // Update turn indicator
       UIManager.updateTurnIndicator();
       
-      // Setup game UI elements
-      UIManager.setupGameUI();
+      // Setup game UI elements with the correct parameters
+      const currentRoomId = roomId;
+      const playerColor = GameState.getPlayerColor();
+      console.log('🔴 Setting up game UI with:', { roomId: currentRoomId, playerColor });
+      
+      // Pass the required parameters
+      UIManager.setupGameUI(currentRoomId, playerColor);
       
       // Show appropriate message based on whose turn it is
       if (GameState.isPlayerTurn()) {
